@@ -6,234 +6,10 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  password      String
-  firstName     String
-  lastName      String
-  phone         String?
-  role          UserRole  @default(STAFF)
-  isActive      Boolean   @default(true)
-  branchId      String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  // İlişkiler
-  branch        Branch?   @relation(fields: [branchId], references: [id])
-  managedBranch Branch?   @relation("BranchManager")
-  patients      Patient[]
-  appointments  Appointment[]
-  treatments    Treatment[]
-  invoices      Invoice[]
-  notes         Note[]
-  activityLogs  ActivityLog[]
-
-  @@map("users")
-}
-
-model Branch {
-  id            String    @id @default(cuid())
-  name          String
-  code          String    @unique // Şube kodu (örn: IST-001, ANK-002)
-  address       String
-  phone         String
-  email         String?
-  managerId     String?
-  isActive      Boolean   @default(true)
-  timezone      String    @default("Europe/Istanbul")
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  // İlişkiler
-  users         User[]
-  patients      Patient[]
-  appointments  Appointment[]
-  treatments    Treatment[]
-  invoices      Invoice[]
-  inventory     Inventory[]
-  manager       User?     @relation("BranchManager", fields: [managerId], references: [id])
-
-  @@map("branches")
-}
-
-model Patient {
-  id            String    @id @default(cuid())
-  firstName     String
-  lastName      String
-  email         String?
-  phone         String
-  dateOfBirth   DateTime?
-  gender        Gender
-  address       String?
-  emergencyContact String?
-  emergencyPhone   String?
-  medicalHistory   String?
-  allergies        String?
-  notes            String?
-  status           PatientStatus @default(ACTIVE)
-  branchId         String
-  assignedDoctorId String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  // İlişkiler
-  branch        Branch        @relation(fields: [branchId], references: [id])
-  assignedDoctor User?        @relation(fields: [assignedDoctorId], references: [id])
-  appointments  Appointment[]
-  treatments    Treatment[]
-  invoices      Invoice[]
-  notes         Note[]
-
-  @@map("patients")
-}
-
-model Appointment {
-  id            String    @id @default(cuid())
-  patientId     String
-  doctorId      String
-  branchId      String
-  date          DateTime
-  duration      Int       @default(30) // dakika
-  type          AppointmentType
-  status        AppointmentStatus @default(SCHEDULED)
-  notes         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  // İlişkiler
-  patient       Patient   @relation(fields: [patientId], references: [id])
-  doctor        User      @relation(fields: [doctorId], references: [id])
-  branch        Branch    @relation(fields: [branchId], references: [id])
-
-  @@map("appointments")
-}
-
-model Treatment {
-  id            String    @id @default(cuid())
-  patientId     String
-  doctorId      String
-  branchId      String
-  name          String
-  type          TreatmentType
-  status        TreatmentStatus @default(PLANNED)
-  startDate     DateTime?
-  endDate       DateTime?
-  cost          Decimal   @db.Decimal(10, 2)
-  notes         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  // İlişkiler
-  patient       Patient   @relation(fields: [patientId], references: [id])
-  doctor        User      @relation(fields: [doctorId], references: [id])
-  branch        Branch    @relation(fields: [branchId], references: [id])
-  invoices      Invoice[]
-
-  @@map("treatments")
-}
-
-model Invoice {
-  id            String    @id @default(cuid())
-  invoiceNumber String    @unique
-  patientId     String
-  doctorId      String
-  branchId      String
-  treatmentId   String?
-  amount        Decimal   @db.Decimal(10, 2)
-  tax           Decimal   @db.Decimal(10, 2) @default(0)
-  total         Decimal   @db.Decimal(10, 2)
-  status        InvoiceStatus @default(PENDING)
-  dueDate       DateTime
-  paidDate      DateTime?
-  notes         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  // İlişkiler
-  patient       Patient   @relation(fields: [patientId], references: [id])
-  doctor        User      @relation(fields: [doctorId], references: [id])
-  branch        Branch    @relation(fields: [branchId], references: [id])
-  treatment     Treatment? @relation(fields: [treatmentId], references: [id])
-
-  @@map("invoices")
-}
-
-model Note {
-  id            String    @id @default(cuid())
-  patientId     String?
-  doctorId      String
-  branchId      String?
-  type          NoteType
-  category      String?
-  title         String
-  content       String
-  tags          String[]  @default([])
-  priority      Priority  @default(MEDIUM)
-  status        NoteStatus @default(ACTIVE)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  // İlişkiler
-  patient       Patient?  @relation(fields: [patientId], references: [id])
-  doctor        User      @relation(fields: [doctorId], references: [id])
-  branch        Branch?   @relation(fields: [branchId], references: [id])
-
-  @@map("notes")
-}
-
-model Inventory {
-  id            String    @id @default(cuid())
-  name          String
-  description   String?
-  category      String
-  quantity      Int
-  unit          String
-  cost          Decimal   @db.Decimal(10, 2)
-  supplier      String?
-  branchId      String
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  // İlişkiler
-  branch        Branch    @relation(fields: [branchId], references: [id])
-
-  @@map("inventory")
-}
-
-model ActivityLog {
-  id            String    @id @default(cuid())
-  userId        String
-  branchId      String?
-  action        String
-  details       String?
-  ipAddress     String?
-  userAgent     String?
-  createdAt     DateTime  @default(now())
-
-  // İlişkiler
-  user          User      @relation(fields: [userId], references: [id])
-  branch        Branch?   @relation(fields: [branchId], references: [id])
-
-  @@map("activity_logs")
-}
-
-model SystemSettings {
-  id            String    @id @default(cuid())
-  key           String    @unique
-  value         String
-  description   String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  @@map("system_settings")
-}
-
-// Enums
 enum UserRole {
   SUPER_ADMIN
   BRANCH_MANAGER
@@ -250,21 +26,6 @@ enum Gender {
   OTHER
 }
 
-enum PatientStatus {
-  ACTIVE
-  INACTIVE
-  ARCHIVED
-}
-
-enum AppointmentType {
-  CONSULTATION
-  TREATMENT
-  CLEANING
-  EMERGENCY
-  FOLLOW_UP
-  SURGERY
-}
-
 enum AppointmentStatus {
   SCHEDULED
   CONFIRMED
@@ -274,15 +35,13 @@ enum AppointmentStatus {
   NO_SHOW
 }
 
-enum TreatmentType {
-  FILLING
-  ROOT_CANAL
-  EXTRACTION
+enum AppointmentType {
+  CONSULTATION
+  TREATMENT
+  FOLLOW_UP
+  EMERGENCY
   CLEANING
-  WHITENING
-  ORTHODONTICS
   SURGERY
-  OTHER
 }
 
 enum TreatmentStatus {
@@ -292,21 +51,44 @@ enum TreatmentStatus {
   CANCELLED
 }
 
+enum TreatmentType {
+  FILLING
+  EXTRACTION
+  ROOT_CANAL
+  CROWN
+  BRIDGE
+  IMPLANT
+  ORTHODONTICS
+  CLEANING
+  WHITENING
+  SURGERY
+}
+
 enum InvoiceStatus {
-  PENDING
+  DRAFT
+  SENT
   PAID
   OVERDUE
   CANCELLED
 }
 
+enum PaymentMethod {
+  CASH
+  CREDIT_CARD
+  BANK_TRANSFER
+  INSURANCE
+  CHECK
+}
+
 enum NoteType {
-  MEDICAL
+  PATIENT
   TREATMENT
   APPOINTMENT
+  DOCTOR
   GENERAL
 }
 
-enum Priority {
+enum NotePriority {
   LOW
   MEDIUM
   HIGH
@@ -316,5 +98,270 @@ enum Priority {
 enum NoteStatus {
   ACTIVE
   ARCHIVED
-  URGENT
+  DELETED
+}
+
+enum BranchStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  firstName String
+  lastName  String
+  phone     String?
+  role      UserRole
+  branchId  String?
+  branch    Branch?  @relation(fields: [branchId], references: [id])
+  isActive  Boolean  @default(true)
+  lastLogin DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  appointments    Appointment[]
+  treatments     Treatment[]
+  invoices       Invoice[]
+  notes          Note[]
+  activityLogs   ActivityLog[]
+
+  @@index([email])
+  @@index([branchId])
+  @@index([role])
+}
+
+model Branch {
+  id          String       @id @default(cuid())
+  name        String
+  address     String
+  phone       String
+  email       String?
+  managerId   String?
+  manager     User?        @relation("BranchManager", fields: [managerId], references: [id])
+  status      BranchStatus @default(ACTIVE)
+  openingTime String?
+  closingTime String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relations
+  users        User[]
+  patients     Patient[]
+  appointments Appointment[]
+  treatments   Treatment[]
+  invoices     Invoice[]
+  notes        Note[]
+  inventory    Inventory[]
+  activityLogs ActivityLog[]
+
+  @@index([name])
+  @@index([status])
+}
+
+model Patient {
+  id          String   @id @default(cuid())
+  fileNumber  String   @unique
+  firstName   String
+  lastName    String
+  gender      Gender
+  birthDate   DateTime
+  phone       String
+  email       String?
+  address     String?
+  emergencyContact String?
+  emergencyPhone   String?
+  medicalHistory  String?
+  allergies       String?
+  insurance       String?
+  branchId        String
+  branch          Branch     @relation(fields: [branchId], references: [id])
+  isActive        Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  // Relations
+  appointments Appointment[]
+  treatments   Treatment[]
+  invoices     Invoice[]
+  notes        Note[]
+
+  @@index([fileNumber])
+  @@index([firstName, lastName])
+  @@index([phone])
+  @@index([branchId])
+  @@index([isActive])
+}
+
+model Appointment {
+  id          String           @id @default(cuid())
+  patientId   String
+  patient     Patient          @relation(fields: [patientId], references: [id])
+  doctorId    String
+  doctor      User             @relation(fields: [doctorId], references: [id])
+  branchId    String
+  branch      Branch           @relation(fields: [branchId], references: [id])
+  date        DateTime
+  startTime   String
+  endTime     String
+  duration    Int              // minutes
+  type        AppointmentType
+  status      AppointmentStatus @default(SCHEDULED)
+  notes       String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Relations
+  treatments Treatment[]
+  notes      Note[]
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([branchId])
+  @@index([date])
+  @@index([status])
+  @@index([type])
+}
+
+model Treatment {
+  id          String         @id @default(cuid())
+  patientId   String
+  patient     Patient        @relation(fields: [patientId], references: [id])
+  doctorId    String
+  doctor      User           @relation(fields: [doctorId], references: [id])
+  appointmentId String?
+  appointment Appointment?   @relation(fields: [appointmentId], references: [id])
+  branchId    String
+  branch      Branch         @relation(fields: [branchId], references: [id])
+  type        TreatmentType
+  status      TreatmentStatus @default(PLANNED)
+  description String
+  cost        Decimal        @db.Decimal(10, 2)
+  startDate   DateTime?
+  endDate     DateTime?
+  notes       String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  // Relations
+  invoices Invoice[]
+  notes    Note[]
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([branchId])
+  @@index([type])
+  @@index([status])
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  invoiceNumber String        @unique
+  patientId     String
+  patient       Patient       @relation(fields: [patientId], references: [id])
+  treatmentId   String?
+  treatment     Treatment?    @relation(fields: [treatmentId], references: [id])
+  branchId      String
+  branch        Branch        @relation(fields: [branchId], references: [id])
+  amount        Decimal       @db.Decimal(10, 2)
+  tax           Decimal       @db.Decimal(10, 2) @default(0)
+  total         Decimal       @db.Decimal(10, 2)
+  status        InvoiceStatus @default(DRAFT)
+  paymentMethod PaymentMethod?
+  dueDate       DateTime?
+  paidDate      DateTime?
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([invoiceNumber])
+  @@index([patientId])
+  @@index([branchId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model Note {
+  id        String      @id @default(cuid())
+  title     String
+  content   String      @db.Text
+  type      NoteType
+  priority  NotePriority @default(MEDIUM)
+  status    NoteStatus  @default(ACTIVE)
+  tags      String?     // JSON array as string for MariaDB compatibility
+  authorId  String
+  author    User        @relation(fields: [authorId], references: [id])
+  branchId  String
+  branch    Branch      @relation(fields: [branchId], references: [id])
+  patientId String?
+  patient   Patient?    @relation(fields: [patientId], references: [id])
+  treatmentId String?
+  treatment Treatment?  @relation(fields: [treatmentId], references: [id])
+  appointmentId String?
+  appointment Appointment? @relation(fields: [appointmentId], references: [id])
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@index([title])
+  @@index([type])
+  @@index([priority])
+  @@index([status])
+  @@index([authorId])
+  @@index([branchId])
+  @@index([patientId])
+}
+
+model Inventory {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  category    String
+  quantity    Int
+  unit        String
+  cost        Decimal  @db.Decimal(10, 2)
+  branchId    String
+  branch      Branch   @relation(fields: [branchId], references: [id])
+  minQuantity Int      @default(0)
+  maxQuantity Int?
+  supplier    String?
+  lastRestock DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([name])
+  @@index([category])
+  @@index([branchId])
+}
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  branchId    String
+  branch      Branch   @relation(fields: [branchId], references: [id])
+  action      String
+  details     String?  @db.Text
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([branchId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model SystemSettings {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String   @db.Text
+  description String?
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([key])
 } 
