@@ -1,0 +1,320 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String
+  firstName     String
+  lastName      String
+  phone         String?
+  role          UserRole  @default(STAFF)
+  isActive      Boolean   @default(true)
+  branchId      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // İlişkiler
+  branch        Branch?   @relation(fields: [branchId], references: [id])
+  managedBranch Branch?   @relation("BranchManager")
+  patients      Patient[]
+  appointments  Appointment[]
+  treatments    Treatment[]
+  invoices      Invoice[]
+  notes         Note[]
+  activityLogs  ActivityLog[]
+
+  @@map("users")
+}
+
+model Branch {
+  id            String    @id @default(cuid())
+  name          String
+  code          String    @unique // Şube kodu (örn: IST-001, ANK-002)
+  address       String
+  phone         String
+  email         String?
+  managerId     String?
+  isActive      Boolean   @default(true)
+  timezone      String    @default("Europe/Istanbul")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // İlişkiler
+  users         User[]
+  patients      Patient[]
+  appointments  Appointment[]
+  treatments    Treatment[]
+  invoices      Invoice[]
+  inventory     Inventory[]
+  manager       User?     @relation("BranchManager", fields: [managerId], references: [id])
+
+  @@map("branches")
+}
+
+model Patient {
+  id            String    @id @default(cuid())
+  firstName     String
+  lastName      String
+  email         String?
+  phone         String
+  dateOfBirth   DateTime?
+  gender        Gender
+  address       String?
+  emergencyContact String?
+  emergencyPhone   String?
+  medicalHistory   String?
+  allergies        String?
+  notes            String?
+  status           PatientStatus @default(ACTIVE)
+  branchId         String
+  assignedDoctorId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // İlişkiler
+  branch        Branch        @relation(fields: [branchId], references: [id])
+  assignedDoctor User?        @relation(fields: [assignedDoctorId], references: [id])
+  appointments  Appointment[]
+  treatments    Treatment[]
+  invoices      Invoice[]
+  notes         Note[]
+
+  @@map("patients")
+}
+
+model Appointment {
+  id            String    @id @default(cuid())
+  patientId     String
+  doctorId      String
+  branchId      String
+  date          DateTime
+  duration      Int       @default(30) // dakika
+  type          AppointmentType
+  status        AppointmentStatus @default(SCHEDULED)
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // İlişkiler
+  patient       Patient   @relation(fields: [patientId], references: [id])
+  doctor        User      @relation(fields: [doctorId], references: [id])
+  branch        Branch    @relation(fields: [branchId], references: [id])
+
+  @@map("appointments")
+}
+
+model Treatment {
+  id            String    @id @default(cuid())
+  patientId     String
+  doctorId      String
+  branchId      String
+  name          String
+  type          TreatmentType
+  status        TreatmentStatus @default(PLANNED)
+  startDate     DateTime?
+  endDate       DateTime?
+  cost          Decimal   @db.Decimal(10, 2)
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // İlişkiler
+  patient       Patient   @relation(fields: [patientId], references: [id])
+  doctor        User      @relation(fields: [doctorId], references: [id])
+  branch        Branch    @relation(fields: [branchId], references: [id])
+  invoices      Invoice[]
+
+  @@map("treatments")
+}
+
+model Invoice {
+  id            String    @id @default(cuid())
+  invoiceNumber String    @unique
+  patientId     String
+  doctorId      String
+  branchId      String
+  treatmentId   String?
+  amount        Decimal   @db.Decimal(10, 2)
+  tax           Decimal   @db.Decimal(10, 2) @default(0)
+  total         Decimal   @db.Decimal(10, 2)
+  status        InvoiceStatus @default(PENDING)
+  dueDate       DateTime
+  paidDate      DateTime?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // İlişkiler
+  patient       Patient   @relation(fields: [patientId], references: [id])
+  doctor        User      @relation(fields: [doctorId], references: [id])
+  branch        Branch    @relation(fields: [branchId], references: [id])
+  treatment     Treatment? @relation(fields: [treatmentId], references: [id])
+
+  @@map("invoices")
+}
+
+model Note {
+  id            String    @id @default(cuid())
+  patientId     String?
+  doctorId      String
+  branchId      String?
+  type          NoteType
+  category      String?
+  title         String
+  content       String
+  tags          String[]  @default([])
+  priority      Priority  @default(MEDIUM)
+  status        NoteStatus @default(ACTIVE)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // İlişkiler
+  patient       Patient?  @relation(fields: [patientId], references: [id])
+  doctor        User      @relation(fields: [doctorId], references: [id])
+  branch        Branch?   @relation(fields: [branchId], references: [id])
+
+  @@map("notes")
+}
+
+model Inventory {
+  id            String    @id @default(cuid())
+  name          String
+  description   String?
+  category      String
+  quantity      Int
+  unit          String
+  cost          Decimal   @db.Decimal(10, 2)
+  supplier      String?
+  branchId      String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // İlişkiler
+  branch        Branch    @relation(fields: [branchId], references: [id])
+
+  @@map("inventory")
+}
+
+model ActivityLog {
+  id            String    @id @default(cuid())
+  userId        String
+  branchId      String?
+  action        String
+  details       String?
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime  @default(now())
+
+  // İlişkiler
+  user          User      @relation(fields: [userId], references: [id])
+  branch        Branch?   @relation(fields: [branchId], references: [id])
+
+  @@map("activity_logs")
+}
+
+model SystemSettings {
+  id            String    @id @default(cuid())
+  key           String    @unique
+  value         String
+  description   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("system_settings")
+}
+
+// Enums
+enum UserRole {
+  SUPER_ADMIN
+  BRANCH_MANAGER
+  DOCTOR
+  NURSE
+  RECEPTIONIST
+  ACCOUNTANT
+  STAFF
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum PatientStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum AppointmentType {
+  CONSULTATION
+  TREATMENT
+  CLEANING
+  EMERGENCY
+  FOLLOW_UP
+  SURGERY
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum TreatmentType {
+  FILLING
+  ROOT_CANAL
+  EXTRACTION
+  CLEANING
+  WHITENING
+  ORTHODONTICS
+  SURGERY
+  OTHER
+}
+
+enum TreatmentStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum NoteType {
+  MEDICAL
+  TREATMENT
+  APPOINTMENT
+  GENERAL
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum NoteStatus {
+  ACTIVE
+  ARCHIVED
+  URGENT
+} 
