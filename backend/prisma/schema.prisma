@@ -210,7 +210,6 @@ model Appointment {
   duration    Int              // minutes
   type        AppointmentType
   status      AppointmentStatus @default(SCHEDULED)
-  notes       String?
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
@@ -242,7 +241,6 @@ model Treatment {
   cost        Decimal        @db.Decimal(10, 2)
   startDate   DateTime?
   endDate     DateTime?
-  notes       String?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
