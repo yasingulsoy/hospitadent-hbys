@@ -1,9 +1,43 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, authorizeRoles } = require('../middleware/auth');
 
 const router = express.Router();
-const prisma = new PrismaClient();
+
+// Mock invoices data
+const mockInvoices = [
+  {
+    id: '1',
+    invoiceNumber: 'INV001',
+    patientId: '1',
+    patient: {
+      id: '1',
+      firstName: 'Ahmet',
+      lastName: 'Yılmaz'
+    },
+    treatmentId: '1',
+    treatment: {
+      id: '1',
+      type: 'FILLING',
+      description: 'Diş dolgusu'
+    },
+    branchId: '1',
+    branch: {
+      id: '1',
+      name: 'Ana Şube',
+      code: 'AS'
+    },
+    amount: 150.00,
+    tax: 15.00,
+    total: 165.00,
+    status: 'PAID',
+    paymentMethod: 'CASH',
+    dueDate: new Date('2024-01-20'),
+    paidDate: new Date('2024-01-10'),
+    notes: 'Ödeme alındı',
+    createdAt: new Date(),
+    updatedAt: new Date()
+  }
+];
 
 // Tüm faturaları getir
 router.get('/', authenticateToken, async (req, res) => {

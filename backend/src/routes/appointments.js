@@ -1,9 +1,41 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, authorizeRoles } = require('../middleware/auth');
 
 const router = express.Router();
-const prisma = new PrismaClient();
+
+// Mock appointments data
+const mockAppointments = [
+  {
+    id: '1',
+    patientId: '1',
+    patient: {
+      id: '1',
+      firstName: 'Ahmet',
+      lastName: 'Yılmaz',
+      phone: '5551234567'
+    },
+    doctorId: '1',
+    doctor: {
+      id: '1',
+      firstName: 'Dr. Mehmet',
+      lastName: 'Kaya'
+    },
+    branchId: '1',
+    branch: {
+      id: '1',
+      name: 'Ana Şube',
+      code: 'AS'
+    },
+    date: new Date('2024-01-15'),
+    startTime: '10:00',
+    endTime: '11:00',
+    duration: 60,
+    type: 'CONSULTATION',
+    status: 'SCHEDULED',
+    createdAt: new Date(),
+    updatedAt: new Date()
+  }
+];
 
 // Tüm randevuları getir
 router.get('/', authenticateToken, async (req, res) => {

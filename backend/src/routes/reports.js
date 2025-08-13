@@ -1,9 +1,21 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, authorizeRoles } = require('../middleware/auth');
 
 const router = express.Router();
-const prisma = new PrismaClient();
+
+// Mock reports data
+const mockReports = {
+  dashboard: {
+    totalPatients: 250,
+    totalAppointments: 45,
+    totalTreatments: 120,
+    totalRevenue: 15000.00,
+    monthlyStats: [
+      { month: 'Ocak', patients: 25, appointments: 45, revenue: 1500 },
+      { month: 'Şubat', patients: 30, appointments: 52, revenue: 1800 }
+    ]
+  }
+};
 
 // Genel istatistikler
 router.get('/stats', authenticateToken, async (req, res) => {

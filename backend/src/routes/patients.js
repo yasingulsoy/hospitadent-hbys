@@ -1,9 +1,46 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
 const { authenticateToken, authorizeRoles } = require('../middleware/auth');
 
 const router = express.Router();
-const prisma = new PrismaClient();
+
+// Mock patients data
+const mockPatients = [
+  {
+    id: '1',
+    fileNumber: 'P001',
+    firstName: 'Ahmet',
+    lastName: 'Yılmaz',
+    gender: 'MALE',
+    birthDate: new Date('1990-05-15'),
+    phone: '5551234567',
+    email: 'ahmet@example.com',
+    address: 'İstanbul, Türkiye',
+    emergencyContact: 'Fatma Yılmaz',
+    emergencyPhone: '5559876543',
+    medicalHistory: 'Alerji yok',
+    allergies: 'Yok',
+    insurance: 'SGK',
+    branchId: '1',
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    branch: {
+      id: '1',
+      name: 'Ana Şube',
+      code: 'AS'
+    },
+    assignedDoctor: {
+      id: '1',
+      firstName: 'Dr. Mehmet',
+      lastName: 'Kaya'
+    },
+    _count: {
+      appointments: 5,
+      treatments: 3,
+      invoices: 2
+    }
+  }
+];
 
 // Tüm hastaları getir
 router.get('/', authenticateToken, async (req, res) => {
@@ -18,66 +55,24 @@ router.get('/', authenticateToken, async (req, res) => {
     } = req.query;
     const skip = (page - 1) * limit;
 
-    // Filtreleme koşulları
-    const where = {};
-    
-    if (search) {
-      where.OR = [
-        { firstName: { contains: search, mode: 'insensitive' } },
-        { lastName: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } },
-        { phone: { contains: search, mode: 'insensitive' } }
-      ];
-    }
+    // Filtreleme
+    let filteredPatients = mockPatients.filter(patient => {
+      if (branchId && patient.branchId !== branchId) return false;
+      if (req.user.role !== 'SUPER_ADMIN' && patient.branchId !== req.user.branchId) return false;
+      if (status && patient.isActive !== (status === 'ACTIVE')) return false;
+      if (gender && patient.gender !== gender) return false;
+      if (search) {
+        const searchLower = search.toLowerCase();
+        return patient.firstName.toLowerCase().includes(searchLower) ||
+               patient.lastName.toLowerCase().includes(searchLower) ||
+               patient.email?.toLowerCase().includes(searchLower) ||
+               patient.phone.includes(search);
+      }
+      return true;
+    });
 
-    if (status) {
-      where.status = status;
-    }
-
-    if (gender) {
-      where.gender = gender;
-    }
-
-    // Şube filtresi
-    if (branchId) {
-      where.branchId = branchId;
-    } else if (req.user.role !== 'SUPER_ADMIN') {
-      // Super admin değilse sadece kendi şubesini görebilir
-      where.branchId = req.user.branchId;
-    }
-
-    const [patients, total] = await Promise.all([
-      prisma.patient.findMany({
-        where,
-        include: {
-          branch: {
-            select: {
-              id: true,
-              name: true,
-              code: true
-            }
-          },
-          assignedDoctor: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true
-            }
-          },
-          _count: {
-            select: {
-              appointments: true,
-              treatments: true,
-              invoices: true
-            }
-          }
-        },
-        skip: parseInt(skip),
-        take: parseInt(limit),
-        orderBy: { createdAt: 'desc' }
-      }),
-      prisma.patient.count({ where })
-    ]);
+    const total = filteredPatients.length;
+    const patients = filteredPatients.slice(skip, skip + parseInt(limit));
 
     res.json({
       success: true,
@@ -104,67 +99,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const patient = await prisma.patient.findUnique({
-      where: { id },
-      include: {
-        branch: {
-          select: {
-            id: true,
-            name: true,
-            code: true
-          }
-        },
-        assignedDoctor: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            phone: true
-          }
-        },
-        appointments: {
-          include: {
-            doctor: {
-              select: {
-                firstName: true,
-                lastName: true
-              }
-            }
-          },
-          orderBy: { date: 'desc' },
-          take: 10
-        },
-        treatments: {
-          include: {
-            doctor: {
-              select: {
-                firstName: true,
-                lastName: true
-              }
-            }
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 10
-        },
-        invoices: {
-          orderBy: { createdAt: 'desc' },
-          take: 10
-        },
-        notes: {
-          include: {
-            doctor: {
-              select: {
-                firstName: true,
-                lastName: true
-              }
-            }
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 10
-        }
-      }
-    });
+    const patient = mockPatients.find(p => p.id === id);
 
     if (!patient) {
       return res.status(404).json({
@@ -216,9 +151,7 @@ router.post('/', authenticateToken, async (req, res) => {
     } = req.body;
 
     // Telefon kontrolü
-    const existingPatient = await prisma.patient.findFirst({
-      where: { phone }
-    });
+    const existingPatient = mockPatients.find(p => p.phone === phone);
 
     if (existingPatient) {
       return res.status(400).json({
@@ -228,9 +161,7 @@ router.post('/', authenticateToken, async (req, res) => {
     }
 
     // Şube kontrolü
-    const branch = await prisma.branch.findUnique({
-      where: { id: branchId || req.user.branchId }
-    });
+    const branch = mockPatients.find(p => p.branchId === branchId || p.branchId === req.user.branchId);
 
     if (!branch) {
       return res.status(400).json({
@@ -241,9 +172,7 @@ router.post('/', authenticateToken, async (req, res) => {
 
     // Doktor kontrolü
     if (assignedDoctorId) {
-      const doctor = await prisma.user.findUnique({
-        where: { id: assignedDoctorId }
-      });
+      const doctor = mockPatients.find(p => p.id === assignedDoctorId);
 
       if (!doctor || doctor.role !== 'DOCTOR') {
         return res.status(400).json({
@@ -253,57 +182,54 @@ router.post('/', authenticateToken, async (req, res) => {
       }
     }
 
-    const patient = await prisma.patient.create({
-      data: {
-        firstName,
-        lastName,
-        email,
-        phone,
-        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-        gender,
-        address,
-        emergencyContact,
-        emergencyPhone,
-        medicalHistory,
-        allergies,
-        notes,
-        assignedDoctorId,
-        branchId: branchId || req.user.branchId
+    const newPatient = {
+      id: (mockPatients.length + 1).toString(),
+      fileNumber: `P${(mockPatients.length + 1).toString().padStart(3, '0')}`,
+      firstName,
+      lastName,
+      email,
+      phone,
+      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+      gender,
+      address,
+      emergencyContact,
+      emergencyPhone,
+      medicalHistory,
+      allergies,
+      notes,
+      assignedDoctorId,
+      branchId: branchId || req.user.branchId,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      branch: {
+        id: branchId || req.user.branchId,
+        name: 'Ana Şube', // Mock data, should be fetched from DB
+        code: 'AS' // Mock data, should be fetched from DB
       },
-      include: {
-        branch: {
-          select: {
-            id: true,
-            name: true,
-            code: true
-          }
-        },
-        assignedDoctor: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true
-          }
-        }
+      assignedDoctor: {
+        id: assignedDoctorId,
+        firstName: 'Dr. Mehmet', // Mock data, should be fetched from DB
+        lastName: 'Kaya' // Mock data, should be fetched from DB
+      },
+      _count: {
+        appointments: 0,
+        treatments: 0,
+        invoices: 0
       }
-    });
+    };
+
+    mockPatients.push(newPatient);
 
     // Activity log
-    await prisma.activityLog.create({
-      data: {
-        userId: req.user.id,
-        branchId: patient.branchId,
-        action: 'CREATE_PATIENT',
-        details: `Yeni hasta oluşturuldu: ${patient.firstName} ${patient.lastName}`,
-        ipAddress: req.ip,
-        userAgent: req.get('User-Agent')
-      }
-    });
+    // This part would require a PrismaClient instance and a mockActivityLogs array
+    // For now, we'll just log to console
+    console.log(`Activity Log: User ${req.user.id} created patient ${newPatient.firstName} ${newPatient.lastName}`);
 
     res.status(201).json({
       success: true,
       message: 'Hasta başarıyla oluşturuldu',
-      data: patient
+      data: newPatient
     });
 
   } catch (error) {
@@ -337,9 +263,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     } = req.body;
 
     // Hasta kontrolü
-    const existingPatient = await prisma.patient.findUnique({
-      where: { id }
-    });
+    const existingPatient = mockPatients.find(p => p.id === id);
 
     if (!existingPatient) {
       return res.status(404).json({
@@ -358,12 +282,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     // Telefon kontrolü (kendi telefonu hariç)
     if (phone && phone !== existingPatient.phone) {
-      const phoneExists = await prisma.patient.findFirst({
-        where: { 
-          phone,
-          id: { not: id }
-        }
-      });
+      const phoneExists = mockPatients.find(p => p.phone === phone && p.id !== id);
 
       if (phoneExists) {
         return res.status(400).json({
@@ -375,9 +294,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     // Doktor kontrolü
     if (assignedDoctorId) {
-      const doctor = await prisma.user.findUnique({
-        where: { id: assignedDoctorId }
-      });
+      const doctor = mockPatients.find(p => p.id === assignedDoctorId);
 
       if (!doctor || doctor.role !== 'DOCTOR') {
         return res.status(400).json({
@@ -387,58 +304,34 @@ router.put('/:id', authenticateToken, async (req, res) => {
       }
     }
 
-    const patient = await prisma.patient.update({
-      where: { id },
-      data: {
-        firstName,
-        lastName,
-        email,
-        phone,
-        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-        gender,
-        address,
-        emergencyContact,
-        emergencyPhone,
-        medicalHistory,
-        allergies,
-        notes,
-        assignedDoctorId,
-        status
-      },
-      include: {
-        branch: {
-          select: {
-            id: true,
-            name: true,
-            code: true
-          }
-        },
-        assignedDoctor: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true
-          }
-        }
-      }
-    });
+    const updatedPatient = {
+      ...existingPatient,
+      firstName,
+      lastName,
+      email,
+      phone,
+      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+      gender,
+      address,
+      emergencyContact,
+      emergencyPhone,
+      medicalHistory,
+      allergies,
+      notes,
+      assignedDoctorId,
+      status,
+      updatedAt: new Date()
+    };
 
     // Activity log
-    await prisma.activityLog.create({
-      data: {
-        userId: req.user.id,
-        branchId: patient.branchId,
-        action: 'UPDATE_PATIENT',
-        details: `Hasta güncellendi: ${patient.firstName} ${patient.lastName}`,
-        ipAddress: req.ip,
-        userAgent: req.get('User-Agent')
-      }
-    });
+    // This part would require a PrismaClient instance and a mockActivityLogs array
+    // For now, we'll just log to console
+    console.log(`Activity Log: User ${req.user.id} updated patient ${updatedPatient.firstName} ${updatedPatient.lastName}`);
 
     res.json({
       success: true,
       message: 'Hasta başarıyla güncellendi',
-      data: patient
+      data: updatedPatient
     });
 
   } catch (error) {
@@ -456,18 +349,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
 
     // Hasta kontrolü
-    const patient = await prisma.patient.findUnique({
-      where: { id },
-      include: {
-        _count: {
-          select: {
-            appointments: true,
-            treatments: true,
-            invoices: true
-          }
-        }
-      }
-    });
+    const patient = mockPatients.find(p => p.id === id);
 
     if (!patient) {
       return res.status(404).json({
@@ -492,21 +374,12 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    await prisma.patient.delete({
-      where: { id }
-    });
+    mockPatients = mockPatients.filter(p => p.id !== id);
 
     // Activity log
-    await prisma.activityLog.create({
-      data: {
-        userId: req.user.id,
-        branchId: patient.branchId,
-        action: 'DELETE_PATIENT',
-        details: `Hasta silindi: ${patient.firstName} ${patient.lastName}`,
-        ipAddress: req.ip,
-        userAgent: req.get('User-Agent')
-      }
-    });
+    // This part would require a PrismaClient instance and a mockActivityLogs array
+    // For now, we'll just log to console
+    console.log(`Activity Log: User ${req.user.id} deleted patient ${patient.firstName} ${patient.lastName}`);
 
     res.json({
       success: true,

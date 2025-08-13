@@ -16,7 +16,7 @@ import {
   Trash2,
   Building2,
   FileText,
-  Progress
+  Activity
 } from 'lucide-react';
 
 // Mock tedavi verileri

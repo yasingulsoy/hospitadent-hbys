@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   FileText,
@@ -24,8 +24,24 @@ import {
   Mail
 } from 'lucide-react';
 
+interface Note {
+  id: string;
+  title: string;
+  content: string;
+  type: string;
+  priority: string;
+  status: string;
+  tags: string[];
+  patientName: string;
+  patientPhone: string;
+  doctorName: string;
+  branchName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Mock not verileri
-const mockNotes = [
+const mockNotes: Note[] = [
   {
     id: '1',
     patientName: 'Ahmet Yılmaz',
@@ -33,7 +49,6 @@ const mockNotes = [
     doctorName: 'Dr. Ayşe Kaya',
     branchName: 'İstanbul Kadıköy',
     type: 'MEDICAL',
-    category: 'TEDAVI_NOTU',
     title: 'Sol üst azı diş ağrısı',
     content: 'Hasta şikayet: Gece ağrısı var, sıcak-soğuk hassasiyeti mevcut. Röntgen sonucu: Diş çürük başlangıcı. Önerilen: Dolgu tedavisi. Hasta bilgilendirildi.',
     tags: ['ağrı', 'çürük', 'dolgu'],
@@ -49,7 +64,6 @@ const mockNotes = [
     doctorName: 'Dr. Ali Yıldız',
     branchName: 'Ankara Kızılay',
     type: 'TREATMENT',
-    category: 'TEDAVI_PLANI',
     title: 'Kanal tedavisi planı',
     content: 'Sağ alt azı diş kanal tedavisi planlandı. İlk seans: Kanal açma ve temizlik. İkinci seans: Dolgu. Hasta ağrı kesici reçetesi verildi.',
     tags: ['kanal', 'tedavi', 'plan'],
@@ -65,7 +79,6 @@ const mockNotes = [
     doctorName: 'Dr. Ayşe Kaya',
     branchName: 'İstanbul Kadıköy',
     type: 'APPOINTMENT',
-    category: 'RANDEVU_NOTU',
     title: 'Randevu iptal notu',
     content: 'Hasta aradı: Acil işi çıktı, randevuyu iptal etmek istiyor. Yeni randevu için arayacak. Alternatif tarih önerildi: 18 Ocak.',
     tags: ['iptal', 'randevu', 'acil'],
@@ -81,7 +94,6 @@ const mockNotes = [
     doctorName: 'Dr. Mehmet Demir',
     branchName: 'İzmir Alsancak',
     type: 'GENERAL',
-    category: 'GENEL_NOT',
     title: 'Hasta tercihleri',
     content: 'Hasta beyaz dolgu tercih ediyor. Estetik kaygısı var. Fiyat bilgilendirmesi yapıldı. Hasta memnun.',
     tags: ['estetik', 'dolgu', 'tercih'],
@@ -121,15 +133,16 @@ const statuses = {
 };
 
 export default function NotesPage() {
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
+  const [showNoteModal, setShowNoteModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editMode, setEditMode] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('ALL');
   const [filterPriority, setFilterPriority] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [filterDoctor, setFilterDoctor] = useState('ALL');
-  const [selectedNote, setSelectedNote] = useState(null);
-  const [showNoteModal, setShowNoteModal] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [editMode, setEditMode] = useState(false);
 
   const filteredNotes = mockNotes.filter(note => {
     const matchesSearch = 
@@ -148,7 +161,7 @@ export default function NotesPage() {
 
   const doctors = [...new Set(mockNotes.map(n => n.doctorName))];
 
-  const handleNoteClick = (note) => {
+  const handleNoteClick = (note: Note) => {
     setSelectedNote(note);
     setShowNoteModal(true);
   };

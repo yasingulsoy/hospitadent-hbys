@@ -24,3 +24,24 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Input field stilleri - tüm projede geçerli */
+input, textarea, select {
+  color: #000000 !important;
+  background-color: #ffffff !important;
+}
+
+input::placeholder, textarea::placeholder {
+  color: #6b7280 !important;
+}
+
+/* Focus durumunda da siyah yazı */
+input:focus, textarea:focus, select:focus {
+  color: #000000 !important;
+}
+
+/* Disabled durumunda da okunabilir */
+input:disabled, textarea:disabled, select:disabled {
+  color: #374151 !important;
+  background-color: #f3f4f6 !important;
+}

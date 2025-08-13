@@ -3,116 +3,106 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
-  Calendar,
-  Plus,
-  Clock,
-  User,
-  Stethoscope,
-  Building2,
-  ChevronLeft,
-  ChevronRight,
-  CalendarDays,
-  Search,
-  Filter,
-  Edit,
+  Calendar as CalendarIcon, 
+  ChevronLeft, 
+  ChevronRight, 
+  Plus, 
+  Search, 
+  User, 
+  Phone, 
+  Stethoscope, 
+  Building2, 
+  Edit, 
   Trash2,
-  Eye,
-  AlertCircle,
+  Clock,
   CheckCircle,
-  X,
-  Save,
-  Phone,
-  Mail
+  X
 } from 'lucide-react';
 
-// Mock randevu verileri
-const mockAppointments = [
-  {
-    id: '1',
-    patientName: 'Ahmet Yılmaz',
-    patientPhone: '0532 123 45 67',
-    doctorName: 'Dr. Ayşe Kaya',
-    branchName: 'İstanbul Kadıköy',
-    date: '2024-01-15',
-    time: '09:00',
-    duration: 30,
-    type: 'CONSULTATION',
-    status: 'CONFIRMED',
-    notes: 'Kontrol randevusu - Sol üst azı diş ağrısı',
-    treatmentNotes: 'Hasta şikayet: Gece ağrısı var. Önerilen: Röntgen çekimi'
-  },
-  {
-    id: '2',
-    patientName: 'Fatma Özkan',
-    patientPhone: '0533 234 56 78',
-    doctorName: 'Dr. Ali Yıldız',
-    branchName: 'Ankara Kızılay',
-    date: '2024-01-15',
-    time: '10:30',
-    duration: 60,
-    type: 'TREATMENT',
-    status: 'SCHEDULED',
-    notes: 'Dolgu işlemi - Sağ alt azı diş',
-    treatmentNotes: 'Önceki tedavi: Kanal tedavisi yapıldı. Şimdi dolgu yapılacak.'
-  },
-  {
-    id: '3',
-    patientName: 'Mehmet Demir',
-    patientPhone: '0534 345 67 89',
-    doctorName: 'Dr. Ayşe Kaya',
-    branchName: 'İstanbul Kadıköy',
-    date: '2024-01-15',
-    time: '14:00',
-    duration: 45,
-    type: 'CLEANING',
-    status: 'CANCELLED',
-    notes: 'Hasta iptal etti - Acil durum',
-    treatmentNotes: 'Hasta aradı: Acil işi çıktı, randevuyu iptal etmek istiyor.'
-  },
-  {
-    id: '4',
-    patientName: 'Ayşe Kaya',
-    patientPhone: '0535 456 78 90',
-    doctorName: 'Dr. Mehmet Demir',
-    branchName: 'İzmir Alsancak',
-    date: '2024-01-16',
-    time: '11:00',
-    duration: 90,
-    type: 'SURGERY',
-    status: 'SCHEDULED',
-    notes: 'Diş çekimi - Sol alt yirmi yaş dişi',
-    treatmentNotes: 'Röntgen sonucu: Diş çürük, çekim gerekli. Hasta bilgilendirildi.'
-  }
-];
-
-const appointmentTypes = {
-  CONSULTATION: { label: 'Kontrol', color: 'bg-blue-100 text-blue-800', borderColor: 'border-blue-200' },
-  TREATMENT: { label: 'Tedavi', color: 'bg-green-100 text-green-800', borderColor: 'border-green-200' },
-  CLEANING: { label: 'Temizlik', color: 'bg-purple-100 text-purple-800', borderColor: 'border-purple-200' },
-  EMERGENCY: { label: 'Acil', color: 'bg-red-100 text-red-800', borderColor: 'border-red-200' },
-  FOLLOW_UP: { label: 'Kontrol', color: 'bg-yellow-100 text-yellow-800', borderColor: 'border-yellow-200' },
-  SURGERY: { label: 'Ameliyat', color: 'bg-orange-100 text-orange-800', borderColor: 'border-orange-200' }
-};
-
-const appointmentStatuses = {
-  SCHEDULED: { label: 'Planlandı', color: 'bg-gray-100 text-gray-800' },
-  CONFIRMED: { label: 'Onaylandı', color: 'bg-green-100 text-green-800' },
-  IN_PROGRESS: { label: 'Devam Ediyor', color: 'bg-blue-100 text-blue-800' },
-  COMPLETED: { label: 'Tamamlandı', color: 'bg-purple-100 text-purple-800' },
-  CANCELLED: { label: 'İptal', color: 'bg-red-100 text-red-800' },
-  NO_SHOW: { label: 'Gelmedi', color: 'bg-orange-100 text-orange-800' }
-};
+interface Appointment {
+  id: string;
+  patientName: string;
+  patientPhone: string;
+  date: string;
+  time: string;
+  duration: number;
+  doctorName: string;
+  branchName: string;
+  notes: string;
+  treatmentNotes: string;
+  status: string;
+}
 
 export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState('week'); // day, week, month
-  const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [showNoteModal, setShowNoteModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDoctor, setFilterDoctor] = useState('ALL');
   const [filterBranch, setFilterBranch] = useState('ALL');
+  const [viewMode, setViewMode] = useState('day');
+
+  // Mock randevu verileri
+  const mockAppointments: Appointment[] = [
+    {
+      id: '1',
+      patientName: 'Mehmet Demir',
+      patientPhone: '0555 123 4567',
+      date: '2024-01-15',
+      time: '09:00',
+      duration: 60,
+      doctorName: 'Dr. Ayşe Kaya',
+      branchName: 'İstanbul Kadıköy',
+      notes: 'Kontrol randevusu',
+      treatmentNotes: 'Diş temizliği gerekli',
+      status: 'confirmed'
+    },
+    {
+      id: '2',
+      patientName: 'Fatma Özkan',
+      patientPhone: '0555 987 6543',
+      date: '2024-01-15',
+      time: '10:30',
+      duration: 90,
+      doctorName: 'Dr. Ali Yıldız',
+      branchName: 'Ankara Kızılay',
+      notes: 'Dolgu tedavisi',
+      treatmentNotes: 'Önceki dolgu kontrol edilecek',
+      status: 'confirmed'
+    },
+    {
+      id: '3',
+      patientName: 'Can Yılmaz',
+      patientPhone: '0555 456 7890',
+      date: '2024-01-15',
+      time: '14:00',
+      duration: 45,
+      doctorName: 'Dr. Ayşe Kaya',
+      branchName: 'İzmir Alsancak',
+      notes: 'Temizlik',
+      treatmentNotes: 'Rutin temizlik',
+      status: 'cancelled'
+    }
+  ];
+
+  const appointmentTypes = {
+    CONSULTATION: { label: 'Kontrol', color: 'bg-blue-100 text-blue-800', borderColor: 'border-blue-200' },
+    TREATMENT: { label: 'Tedavi', color: 'bg-green-100 text-green-800', borderColor: 'border-green-200' },
+    CLEANING: { label: 'Temizlik', color: 'bg-purple-100 text-purple-800', borderColor: 'border-purple-200' },
+    EMERGENCY: { label: 'Acil', color: 'bg-red-100 text-red-800', borderColor: 'border-red-200' },
+    FOLLOW_UP: { label: 'Kontrol', color: 'bg-yellow-100 text-yellow-800', borderColor: 'border-yellow-200' },
+    SURGERY: { label: 'Ameliyat', color: 'bg-orange-100 text-orange-800', borderColor: 'border-orange-200' }
+  };
+
+  const appointmentStatuses = {
+    SCHEDULED: { label: 'Planlandı', color: 'bg-gray-100 text-gray-800' },
+    CONFIRMED: { label: 'Onaylandı', color: 'bg-green-100 text-green-800' },
+    IN_PROGRESS: { label: 'Devam Ediyor', color: 'bg-blue-100 text-blue-800' },
+    COMPLETED: { label: 'Tamamlandı', color: 'bg-purple-100 text-purple-800' },
+    CANCELLED: { label: 'İptal', color: 'bg-red-100 text-red-800' },
+    NO_SHOW: { label: 'Gelmedi', color: 'bg-orange-100 text-orange-800' }
+  };
 
   // Takvim navigasyonu
   const goToPrevious = () => {
@@ -138,7 +128,6 @@ export default function CalendarPage() {
   const goToToday = () => {
     const today = new Date();
     setCurrentDate(today);
-    setSelectedDate(today);
   };
 
   // Haftalık görünüm için günleri hesapla
@@ -178,14 +167,14 @@ export default function CalendarPage() {
   const branches = [...new Set(mockAppointments.map(a => a.branchName))];
 
   // Belirli bir gün ve saatteki randevuları al
-  const getAppointmentsForTimeSlot = (date, time) => {
+  const getAppointmentsForTimeSlot = (date: Date, time: string) => {
     return filteredAppointments.filter(appointment => 
       appointment.date === date.toISOString().split('T')[0] && 
       appointment.time === time
     );
   };
 
-  const handleAppointmentClick = (appointment) => {
+  const handleAppointmentClick = (appointment: Appointment) => {
     setSelectedAppointment(appointment);
     setShowAppointmentModal(true);
   };
@@ -298,7 +287,7 @@ export default function CalendarPage() {
                 onClick={goToToday}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
               >
-                <CalendarDays className="h-4 w-4" />
+                <CalendarIcon className="h-4 w-4" />
                 <span>Bugün</span>
               </button>
               <button
@@ -360,8 +349,8 @@ export default function CalendarPage() {
                           key={appointment.id}
                           onClick={() => handleAppointmentClick(appointment)}
                           className={`mb-1 p-2 rounded-lg cursor-pointer hover:shadow-md transition-all border-l-4 ${
-                            appointmentTypes[appointment.type as keyof typeof appointmentTypes].borderColor
-                          } ${appointmentTypes[appointment.type as keyof typeof appointmentTypes].color}`}
+                            appointmentTypes[appointment.status as keyof typeof appointmentTypes].borderColor
+                          } ${appointmentTypes[appointment.status as keyof typeof appointmentTypes].color}`}
                         >
                           <div className="text-xs font-medium text-gray-900 truncate">
                             {appointment.patientName}
@@ -430,7 +419,7 @@ export default function CalendarPage() {
                 {/* Appointment Info */}
                 <div className="bg-blue-50 rounded-lg p-4">
                   <h4 className="font-medium text-gray-900 mb-2 flex items-center">
-                    <Calendar className="h-4 w-4 mr-2" />
+                    <CalendarIcon className="h-4 w-4 mr-2" />
                     Randevu Bilgileri
                   </h4>
                   <div className="grid grid-cols-2 gap-4">
@@ -545,7 +534,7 @@ export default function CalendarPage() {
                     İptal
                   </button>
                   <button className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center space-x-2">
-                    <Save className="h-4 w-4" />
+                    <CheckCircle className="h-4 w-4" />
                     <span>Kaydet</span>
                   </button>
                 </div>

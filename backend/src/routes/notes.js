@@ -1,9 +1,42 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, authorizeRoles } = require('../middleware/auth');
 
 const router = express.Router();
-const prisma = new PrismaClient();
+
+// Mock notes data
+const mockNotes = [
+  {
+    id: '1',
+    title: 'Hasta Notu',
+    content: 'Hasta tedavi sürecinde iyi ilerliyor',
+    type: 'PATIENT_NOTE',
+    priority: 'MEDIUM',
+    status: 'ACTIVE',
+    tags: '["tedavi", "ilerleme"]',
+    authorId: '1',
+    author: {
+      id: '1',
+      firstName: 'Dr. Mehmet',
+      lastName: 'Kaya'
+    },
+    branchId: '1',
+    branch: {
+      id: '1',
+      name: 'Ana Şube',
+      code: 'AS'
+    },
+    patientId: '1',
+    patient: {
+      id: '1',
+      firstName: 'Ahmet',
+      lastName: 'Yılmaz'
+    },
+    treatmentId: null,
+    appointmentId: null,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  }
+];
 
 // Tüm notları getir
 router.get('/', authenticateToken, async (req, res) => {

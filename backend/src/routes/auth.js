@@ -1,73 +1,59 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { PrismaClient } = require('@prisma/client');
-const { authenticateToken } = require('../middleware/auth');
+const pool = require('../config/database');
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
-// Kullanıcı kaydı (sadece super admin yapabilir)
+// Kullanıcı kaydı
 router.post('/register', async (req, res) => {
   try {
-    const {
-      email,
-      password,
-      firstName,
-      lastName,
-      phone,
-      role,
-      branchId
-    } = req.body;
+    const { username, email, password, role, görev_tanımı } = req.body;
 
-    // Email kontrolü
-    const existingUser = await prisma.user.findUnique({
-      where: { email }
-    });
-
-    if (existingUser) {
+    // Gerekli alanları kontrol et
+    if (!username || !email || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Bu email adresi zaten kullanılıyor'
+        message: 'Kullanıcı adı, e-posta ve şifre gereklidir'
       });
     }
 
-    // Şifre hash'leme
-    const hashedPassword = await bcrypt.hash(password, 12);
+    // Email kontrolü
+    const existingUser = await pool.query(
+      'SELECT id FROM users WHERE email = $1 OR username = $2',
+      [email, username]
+    );
 
-    // Kullanıcı oluşturma
-    const user = await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        firstName,
-        lastName,
-        phone,
-        role: role || 'STAFF',
-        branchId
-      },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        role: true,
-        branchId: true,
-        createdAt: true
-      }
-    });
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Bu e-posta adresi veya kullanıcı adı zaten kullanılıyor'
+      });
+    }
+
+    // Şifre hash'leme yok - direkt kaydet
+    const plainPassword = password;
+
+    // Yeni kullanıcı oluştur
+    const result = await pool.query(
+      'INSERT INTO users (username, email, password_hash, role, görev_tanımı, is_active, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW()) RETURNING id, username, email, role, görev_tanımı, is_active, created_at',
+      [username, email, plainPassword, role || 0, görev_tanımı || 'Belirtilmemiş', true]
+    );
+
+    const newUser = result.rows[0];
 
     res.status(201).json({
       success: true,
       message: 'Kullanıcı başarıyla oluşturuldu',
-      data: user
+      data: newUser
     });
 
   } catch (error) {
     console.error('Register error:', error);
     res.status(500).json({
       success: false,
-      message: 'Kullanıcı oluşturulurken hata oluştu'
+      message: 'Kullanıcı oluşturulurken hata oluştu',
+      error: error.message
     });
   }
 });
@@ -75,221 +61,202 @@ router.post('/register', async (req, res) => {
 // Kullanıcı girişi
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { username, password } = req.body;
 
-    // Kullanıcıyı bul
-    const user = await prisma.user.findUnique({
-      where: { email },
-      include: {
-        branch: {
-          select: {
-            id: true,
-            name: true,
-            code: true
-          }
-        },
-        managedBranch: {
-          select: {
-            id: true,
-            name: true,
-            code: true
-          }
-        }
-      }
-    });
-
-    if (!user || !user.isActive) {
-      return res.status(401).json({
+    // Gerekli alanları kontrol et
+    if (!username || !password) {
+      return res.status(400).json({
         success: false,
-        message: 'Geçersiz email veya şifre'
+        message: 'Kullanıcı adı ve şifre gereklidir'
       });
     }
 
-    // Şifre kontrolü
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
+    // Kullanıcıyı bul (username veya email ile)
+    const result = await pool.query(
+      'SELECT id, username, email, password_hash, role, görev_tanımı, is_active FROM users WHERE (username = $1 OR email = $1) AND is_active = true',
+      [username]
+    );
+
+    if (result.rows.length === 0) {
       return res.status(401).json({
         success: false,
-        message: 'Geçersiz email veya şifre'
+        message: 'Geçersiz kullanıcı adı veya şifre'
+      });
+    }
+
+    const user = result.rows[0];
+
+    // Şifre kontrolü - direkt string karşılaştırması
+    const isValidPassword = (password === user.password_hash);
+
+    if (!isValidPassword) {
+      return res.status(401).json({
+        success: false,
+        message: 'Geçersiz kullanıcı adı veya şifre'
       });
     }
 
     // JWT token oluştur
     const token = jwt.sign(
       { 
-        userId: user.id,
-        email: user.email,
-        role: user.role,
-        branchId: user.branchId
+        id: user.id, 
+        username: user.username, 
+        email: user.email, 
+        role: user.role 
       },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      process.env.JWT_SECRET || 'your-secret-key',
+      { expiresIn: '24h' }
     );
 
-    // Activity log
-    await prisma.activityLog.create({
-      data: {
-        userId: user.id,
-        branchId: user.branchId,
-        action: 'LOGIN',
-        details: 'Kullanıcı giriş yaptı',
-        ipAddress: req.ip,
-        userAgent: req.get('User-Agent')
-      }
-    });
-
-    // Kullanıcı bilgilerini döndür (şifre hariç)
-    const { password: _, ...userWithoutPassword } = user;
+    // Şifreyi response'dan çıkar
+    const { password_hash: _, ...userWithoutPassword } = user;
 
     res.json({
       success: true,
       message: 'Giriş başarılı',
-      data: {
-        user: userWithoutPassword,
-        token
-      }
+      user: userWithoutPassword,
+      token
     });
 
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({
       success: false,
-      message: 'Giriş yapılırken hata oluştu'
+      message: 'Giriş yapılırken hata oluştu',
+      error: error.message
     });
   }
 });
 
-// Kullanıcı çıkışı
-router.post('/logout', authenticateToken, async (req, res) => {
+// Kullanıcı profilini getir
+router.get('/profile', async (req, res) => {
   try {
-    // Activity log
-    await prisma.activityLog.create({
-      data: {
-        userId: req.user.id,
-        branchId: req.user.branchId,
-        action: 'LOGOUT',
-        details: 'Kullanıcı çıkış yaptı',
-        ipAddress: req.ip,
-        userAgent: req.get('User-Agent')
-      }
-    });
+    // Token'dan user ID'yi al (basit implementasyon)
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        success: false,
+        message: 'Token gerekli'
+      });
+    }
 
-    res.json({
-      success: true,
-      message: 'Çıkış başarılı'
-    });
+    const token = authHeader.substring(7);
+    
+    // JWT decode (basit implementasyon - production'da daha güvenli olmalı)
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+      
+      const result = await pool.query(
+        'SELECT id, username, email, role, görev_tanımı, is_active, created_at, updated_at FROM users WHERE id = $1',
+        [decoded.id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Kullanıcı bulunamadı'
+        });
+      }
+
+      res.json({
+        success: true,
+        data: result.rows[0]
+      });
+
+    } catch (jwtError) {
+      return res.status(401).json({
+        success: false,
+        message: 'Geçersiz token'
+      });
+    }
 
   } catch (error) {
-    console.error('Logout error:', error);
+    console.error('Profile error:', error);
     res.status(500).json({
       success: false,
-      message: 'Çıkış yapılırken hata oluştu'
-    });
-  }
-});
-
-// Mevcut kullanıcı bilgilerini getir
-router.get('/me', authenticateToken, async (req, res) => {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      include: {
-        branch: {
-          select: {
-            id: true,
-            name: true,
-            code: true
-          }
-        },
-        managedBranch: {
-          select: {
-            id: true,
-            name: true,
-            code: true
-          }
-        }
-      },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        phone: true,
-        role: true,
-        isActive: true,
-        branchId: true,
-        branch: true,
-        managedBranch: true,
-        createdAt: true,
-        updatedAt: true
-      }
-    });
-
-    res.json({
-      success: true,
-      data: user
-    });
-
-  } catch (error) {
-    console.error('Get user error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Kullanıcı bilgileri alınırken hata oluştu'
+      message: 'Profil getirilemedi',
+      error: error.message
     });
   }
 });
 
 // Şifre değiştirme
-router.put('/change-password', authenticateToken, async (req, res) => {
+router.put('/change-password', async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
 
-    // Mevcut şifreyi kontrol et
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id }
-    });
-
-    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
-    if (!isCurrentPasswordValid) {
-      return res.status(400).json({
+    // Token'dan user ID'yi al
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
         success: false,
-        message: 'Mevcut şifre yanlış'
+        message: 'Token gerekli'
       });
     }
 
-    // Yeni şifreyi hash'le
-    const hashedNewPassword = await bcrypt.hash(newPassword, 12);
+    const token = authHeader.substring(7);
+    
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+      
+      // Mevcut şifreyi kontrol et
+      const result = await pool.query(
+        'SELECT password FROM users WHERE id = $1',
+        [decoded.id]
+      );
 
-    // Şifreyi güncelle
-    await prisma.user.update({
-      where: { id: req.user.id },
-      data: { password: hashedNewPassword }
-    });
-
-    // Activity log
-    await prisma.activityLog.create({
-      data: {
-        userId: req.user.id,
-        branchId: req.user.branchId,
-        action: 'CHANGE_PASSWORD',
-        details: 'Kullanıcı şifresini değiştirdi',
-        ipAddress: req.ip,
-        userAgent: req.get('User-Agent')
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Kullanıcı bulunamadı'
+        });
       }
-    });
 
-    res.json({
-      success: true,
-      message: 'Şifre başarıyla değiştirildi'
-    });
+      const isValidPassword = await bcrypt.compare(currentPassword, result.rows[0].password);
+
+      if (!isValidPassword) {
+        return res.status(400).json({
+          success: false,
+          message: 'Mevcut şifre yanlış'
+        });
+      }
+
+      // Yeni şifreyi hash'le ve güncelle
+      const hashedNewPassword = await bcrypt.hash(newPassword, 12);
+      
+      await pool.query(
+        'UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2',
+        [hashedNewPassword, decoded.id]
+      );
+
+      res.json({
+        success: true,
+        message: 'Şifre başarıyla değiştirildi'
+      });
+
+    } catch (jwtError) {
+      return res.status(401).json({
+        success: false,
+        message: 'Geçersiz token'
+      });
+    }
 
   } catch (error) {
     console.error('Change password error:', error);
     res.status(500).json({
       success: false,
-      message: 'Şifre değiştirilirken hata oluştu'
+      message: 'Şifre değiştirilemedi',
+      error: error.message
     });
   }
+});
+
+// Çıkış yap
+router.post('/logout', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Başarıyla çıkış yapıldı'
+  });
 });
 
 module.exports = router; 
