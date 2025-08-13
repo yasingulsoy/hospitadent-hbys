@@ -10,79 +10,157 @@ import {
   CheckCircle,
   Clock,
   Activity,
-  LogOut
+  LogOut,
+  Shield
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 export default function Home() {
-  // Mock şube verileri
-  const branches = [
-    { 
-      id: '1', 
-      name: 'İstanbul Kadıköy Şubesi', 
-      code: 'IST-001', 
-      patients: 1247, 
-      appointments: 23, 
-      revenue: 45230,
-      manager: 'Dr. Ayşe Kaya',
-      status: 'active',
-      lastActivity: '2 dakika önce',
-      growth: '+12%'
-    },
-    { 
-      id: '2', 
-      name: 'Ankara Kızılay Şubesi', 
-      code: 'ANK-001', 
-      patients: 892, 
-      appointments: 18, 
-      revenue: 32150,
-      manager: 'Dr. Ali Yıldız',
-      status: 'active',
-      lastActivity: '15 dakika önce',
-      growth: '+8%'
-    },
-    { 
-      id: '3', 
-      name: 'İzmir Alsancak Şubesi', 
-      code: 'IZM-001', 
-      patients: 756, 
-      appointments: 15, 
-      revenue: 28420,
-      manager: 'Dr. Mehmet Demir',
-      status: 'active',
-      lastActivity: '1 saat önce',
-      growth: '+15%'
-    },
-    { 
-      id: '4', 
-      name: 'Bursa Nilüfer Şubesi', 
-      code: 'BUR-001', 
-      patients: 634, 
-      appointments: 12, 
-      revenue: 19850,
-      manager: 'Dr. Fatma Özkan',
-      status: 'active',
-      lastActivity: '30 dakika önce',
-      growth: '+6%'
-    },
-    { 
-      id: '5', 
-      name: 'Antalya Muratpaşa Şubesi', 
-      code: 'ANT-001', 
-      patients: 523, 
-      appointments: 9, 
-      revenue: 15680,
-      manager: 'Dr. Can Yılmaz',
-      status: 'active',
-      lastActivity: '45 dakika önce',
-      growth: '+10%'
+  const [role, setRole] = useState<number | null>(null);
+  const [branchCards, setBranchCards] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    try {
+      const userStr = localStorage.getItem('user') || '';
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        setRole(typeof user?.role === 'number' ? user.role : null);
+      }
+    } catch {}
+    
+    // Şube kartlarını yükle
+    loadBranchCards();
+  }, []);
+
+  const canSeeAdmin = role === 1 || role === 2;
+
+  // Şube kartlarını yükle
+  const loadBranchCards = async () => {
+    try {
+      setLoading(true);
+      
+      // Önce tüm şubeleri al
+      const branchesResponse = await fetch('/api/test-db/branches');
+      if (!branchesResponse.ok) {
+        throw new Error('Şubeler yüklenemedi');
+      }
+      
+      const branchesData = await branchesResponse.json();
+      if (!branchesData.success) {
+        throw new Error('Şube verisi alınamadı');
+      }
+      
+      // İlk 9 şubeyi al
+      const first9Branches = branchesData.branches.slice(0, 9);
+      
+      // Her şube için kart verilerini al
+      const cardsPromises = first9Branches.map(async (branch: any) => {
+        try {
+          const response = await fetch('/api/test-db/branch-cards/data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ branch_id: branch.id })
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.cards) {
+              return {
+                id: branch.id,
+                branch_name: branch.name,
+                location: branch.location || 'Belirtilmemiş',
+                branch_count: branch.branch_count || 0,
+                cards: data.cards
+              };
+            }
+          }
+          
+          // Hata durumunda boş kart döndür
+          return {
+            id: branch.id,
+            branch_name: branch.name,
+            location: branch.location || 'Belirtilmemiş',
+            branch_count: branch.branch_count || 0,
+            cards: []
+          };
+        } catch (error) {
+          console.error(`Şube ${branch.id} kartları yüklenirken hata:`, error);
+          return {
+            id: branch.id,
+            branch_name: branch.name,
+            location: branch.location || 'Belirtilmemiş',
+            branch_count: branch.branch_count || 0,
+            cards: []
+          };
+        }
+      });
+      
+      const branchCardsData = await Promise.all(cardsPromises);
+      setBranchCards(branchCardsData);
+      
+    } catch (error) {
+      console.error('Şube kartları yüklenirken hata:', error);
+      // Hata durumunda örnek veriler göster
+      setBranchCards([
+        {
+          id: 1,
+          branch_name: 'Merkez Şube',
+          location: 'Ana şube',
+          branch_count: 5,
+          cards: [
+            { card_title: 'Hasta Sayısı', formatted_value: '1,234', data_type: 'number' },
+            { card_title: 'Günlük Tahakkuk', formatted_value: '₺45,678', data_type: 'currency' },
+            { card_title: 'Günlük Tahsilat', formatted_value: '₺38,901', data_type: 'currency' }
+          ]
+        },
+        {
+          id: 2,
+          branch_name: 'Kadıköy Şube',
+          location: 'İstanbul',
+          branch_count: 3,
+          cards: [
+            { card_title: 'Hasta Sayısı', formatted_value: '987', data_type: 'number' },
+            { card_title: 'Günlük Tahakkuk', formatted_value: '₺32,456', data_type: 'currency' },
+            { card_title: 'Günlük Tahsilat', formatted_value: '₺28,123', data_type: 'currency' }
+          ]
+        }
+      ]);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  const [realBranches, setRealBranches] = useState<any[]>([]);
+  const [branchesLoading, setBranchesLoading] = useState(true);
+
+  // Gerçek şube verilerini yükle
+  useEffect(() => {
+    loadRealBranches();
+  }, []);
+
+  const loadRealBranches = async () => {
+    try {
+      setBranchesLoading(true);
+      const response = await fetch('/api/test-db/branches');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setRealBranches(data.branches);
+        }
+      }
+    } catch (error) {
+      console.error('Şubeler yüklenirken hata:', error);
+    } finally {
+      setBranchesLoading(false);
+    }
+  };
 
   const totalStats = {
-    totalPatients: branches.reduce((sum, branch) => sum + branch.patients, 0),
-    totalAppointments: branches.reduce((sum, branch) => sum + branch.appointments, 0),
-    totalRevenue: branches.reduce((sum, branch) => sum + branch.revenue, 0),
-    activeBranches: branches.length
+    totalPatients: realBranches.reduce((sum, branch) => sum + (branch.patients || 0), 0),
+    totalAppointments: realBranches.reduce((sum, branch) => sum + (branch.appointments || 0), 0),
+    totalRevenue: realBranches.reduce((sum, branch) => sum + (branch.revenue || 0), 0),
+    activeBranches: realBranches.length
   };
 
   return (
@@ -117,6 +195,16 @@ export default function Home() {
                   </div>
                   <p className="text-xs text-gray-400 mt-2">Son güncelleme: {new Date().toLocaleDateString('tr-TR')}</p>
                 </div>
+                
+                {canSeeAdmin && (
+                  <Link 
+                    href="/admin"
+                    className="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition-all duration-300 font-semibold flex items-center space-x-2"
+                  >
+                    <Shield className="h-4 w-4" />
+                    <span>Admin Panel</span>
+                  </Link>
+                )}
                 
                 <button 
                   onClick={() => {
@@ -220,71 +308,177 @@ export default function Home() {
             </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {branches.map((branch) => (
-              <div key={branch.id} className="bg-gradient-to-br from-gray-50 to-white border border-gray-200 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-bold text-gray-900 mb-1">{branch.name}</h3>
-                    <p className="text-sm text-gray-500 font-mono">{branch.code}</p>
+          {branchesLoading ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-4 text-gray-600">Şubeler yükleniyor...</p>
+            </div>
+          ) : realBranches.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <Building2 className="h-16 w-16 mx-auto text-gray-300 mb-4" />
+              <p className="text-lg">Henüz şube eklenmemiş</p>
+              <p className="text-sm">Admin panelinden şube ekleyebilirsiniz</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {realBranches.map((branch) => (
+                <div key={branch.id} className="bg-gradient-to-br from-gray-50 to-white border border-gray-200 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <h3 className="text-lg font-bold text-gray-900 mb-1">{branch.name}</h3>
+                      <p className="text-sm text-gray-500 font-mono">{branch.code}</p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Aktif
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
-                      <CheckCircle className="h-3 w-3 mr-1" />
-                      Aktif
-                    </span>
-                    <span className="text-xs text-green-600 font-semibold">{branch.growth}</span>
+                  
+                  <div className="space-y-3 mb-6">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600 flex items-center">
+                        <Users className="h-4 w-4 mr-2" />
+                        Hasta Sayısı
+                      </span>
+                      <span className="font-bold text-gray-900">{(branch.patients || 0).toLocaleString()}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600 flex items-center">
+                        <Calendar className="h-4 w-4 mr-2" />
+                        Bugünkü Randevu
+                      </span>
+                      <span className="font-bold text-gray-900">{branch.appointments || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600 flex items-center">
+                        <DollarSign className="h-4 w-4 mr-2" />
+                        Aylık Gelir
+                      </span>
+                      <span className="font-bold text-gray-900">₺{(branch.revenue || 0).toLocaleString()}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600 flex items-center">
+                        <Users className="h-4 w-4 mr-2" />
+                        Şube Müdürü
+                      </span>
+                      <span className="font-medium text-gray-900">{branch.manager || 'Belirtilmemiş'}</span>
+                    </div>
                   </div>
-                </div>
-                
-                <div className="space-y-3 mb-6">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600 flex items-center">
-                      <Users className="h-4 w-4 mr-2" />
-                      Hasta Sayısı
-                    </span>
-                    <span className="font-bold text-gray-900">{branch.patients.toLocaleString()}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600 flex items-center">
-                      <Calendar className="h-4 w-4 mr-2" />
-                      Bugünkü Randevu
-                    </span>
-                    <span className="font-bold text-gray-900">{branch.appointments}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600 flex items-center">
-                      <DollarSign className="h-4 w-4 mr-2" />
-                      Aylık Gelir
-                    </span>
-                    <span className="font-bold text-gray-900">₺{branch.revenue.toLocaleString()}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600 flex items-center">
-                      <Users className="h-4 w-4 mr-2" />
-                      Şube Müdürü
-                    </span>
-                    <span className="font-medium text-gray-900">{branch.manager}</span>
-                  </div>
-                </div>
 
-                <div className="flex space-x-3">
-                  <Link
-                    href={`/admin/branches/${branch.id}`}
-                    className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-xl text-sm text-center hover:shadow-lg transition-all duration-300 font-semibold"
-                  >
-                    Detaylar
-                  </Link>
-                  <Link
-                    href={`/admin/branches/${branch.id}/edit`}
-                    className="flex-1 bg-gray-100 text-gray-700 px-4 py-2 rounded-xl text-sm text-center hover:bg-gray-200 transition-all duration-300 font-semibold"
-                  >
-                    Düzenle
-                  </Link>
+                  {canSeeAdmin ? (
+                    <div className="flex space-x-3">
+                      <Link
+                        href={`/admin/branches/${branch.id}`}
+                        className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-xl text-sm text-center hover:shadow-lg transition-all duration-300 font-semibold"
+                      >
+                        Detaylar
+                      </Link>
+                      <Link
+                        href={`/admin/branches/${branch.id}/edit`}
+                        className="flex-1 bg-gray-100 text-gray-700 px-4 py-2 rounded-xl text-sm text-center hover:bg-gray-200 transition-all duration-300 font-semibold"
+                      >
+                        Düzenle
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gray-400 font-medium">Admin yetkisi gerekli</div>
+                  )}
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Dynamic Branch Cards */}
+        <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100 mb-8">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Şube Kartları</h2>
+              <p className="text-gray-600 mt-1">PostgreSQL'den dinamik olarak yüklenen şube verileri</p>
+            </div>
+            <div className="flex items-center space-x-4">
+              {canSeeAdmin && (
+                <Link href="/admin/branch-cards" className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all duration-300 font-semibold">
+                  Kartları Yönet →
+                </Link>
+              )}
+              <Link href="/all-branches" className="bg-green-600 text-white px-6 py-3 rounded-xl hover:bg-green-700 transition-all duration-300 font-semibold">
+                Tüm Şubeler →
+              </Link>
+            </div>
           </div>
+          
+          {loading ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-4 text-gray-600">Şube kartları yükleniyor...</p>
+            </div>
+          ) : branchCards.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <Building2 className="h-16 w-16 mx-auto text-gray-300 mb-4" />
+              <p className="text-lg">Henüz şube kartı eklenmemiş</p>
+              <p className="text-sm">Admin panelinden şube kartları ekleyebilirsiniz</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {branchCards.map((branch) => (
+                <div key={branch.id} className="bg-gradient-to-br from-gray-50 to-white border border-gray-200 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <h3 className="text-lg font-bold text-gray-900 mb-1">{branch.branch_name}</h3>
+                      <p className="text-sm text-gray-500">{branch.location}</p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Aktif
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-3 mb-6">
+                    {branch.cards && branch.cards.length > 0 ? (
+                      branch.cards.map((card: any, index: number) => (
+                        <div key={index} className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600 flex items-center">
+                            {card.card_icon === 'users' && <Users className="h-4 w-4 mr-2" />}
+                            {card.card_icon === 'calendar' && <Calendar className="h-4 w-4 mr-2" />}
+                            {card.card_icon === 'dollar-sign' && <DollarSign className="h-4 w-4 mr-2" />}
+                            {card.card_icon === 'user' && <Users className="h-4 w-4 mr-2" />}
+                            {card.card_title}
+                          </span>
+                          <span className="font-bold text-gray-900">{card.formatted_value}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-4 text-gray-400">
+                        <p className="text-sm">Kart verisi bulunamadı</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {canSeeAdmin && (
+                    <div className="flex space-x-3">
+                      <Link
+                        href={`/admin/branches/${branch.id}`}
+                        className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-xl text-sm text-center hover:shadow-lg transition-all duration-300 font-semibold"
+                      >
+                        Detaylar
+                      </Link>
+                      <Link
+                        href={`/admin/branch-cards`}
+                        className="flex-1 bg-gray-100 text-gray-700 px-4 py-2 rounded-xl text-sm text-center hover:bg-gray-200 transition-all duration-300 font-semibold"
+                      >
+                        Kartları Düzenle
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Enhanced Today's Appointments */}
@@ -294,9 +488,11 @@ export default function Home() {
               <h2 className="text-2xl font-bold text-gray-900">Bugünkü Randevular</h2>
               <p className="text-gray-600 mt-1">Tüm şubelerdeki günlük randevu takibi</p>
             </div>
-            <Link href="/admin/appointments" className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all duration-300 font-semibold">
-              Admin Panelinde Gör →
-            </Link>
+            {canSeeAdmin && (
+              <Link href="/admin/appointments" className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all duration-300 font-semibold">
+                Admin Panelinde Gör →
+              </Link>
+            )}
           </div>
           
           <div className="overflow-x-auto">

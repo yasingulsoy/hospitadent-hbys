@@ -223,9 +223,12 @@ export default function AdminPanel() {
               ))}
             </div>
 
-            <div className="mt-6 grid grid-cols-2 gap-4">
+            <div className="mt-6 grid grid-cols-3 gap-4">
               <Link href="/admin/branches" className="bg-gray-100 text-gray-700 px-4 py-3 rounded-xl text-center hover:bg-gray-200 transition-all duration-300 font-semibold">
                 Tüm Şubeler
+              </Link>
+              <Link href="/admin/branch-cards" className="bg-purple-100 text-purple-700 px-4 py-3 rounded-xl text-center hover:bg-purple-200 transition-all duration-300 font-semibold">
+                Şube Kartları
               </Link>
               <Link href="/admin/branches/analytics" className="bg-blue-100 text-blue-700 px-4 py-3 rounded-xl text-center hover:bg-blue-200 transition-all duration-300 font-semibold">
                 Şube Analizleri

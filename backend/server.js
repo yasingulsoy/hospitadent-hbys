@@ -27,6 +27,7 @@ app.use('/api/invoices', require('./src/routes/invoices'));
 app.use('/api/notes', require('./src/routes/notes'));
 app.use('/api/reports', require('./src/routes/reports'));
 app.use('/api/users', require('./src/routes/users'));
+app.use('/api/admin', require('./src/routes/admin'));
 
 // Test database connection
 app.use('/api/test-db', require('./src/routes/test-db'));
