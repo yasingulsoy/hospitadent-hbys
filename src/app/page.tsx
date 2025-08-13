@@ -1,3 +1,5 @@
+'use client';
+
 import Link from 'next/link';
 import { 
   Users, 
@@ -7,7 +9,8 @@ import {
   TrendingUp,
   CheckCircle,
   Clock,
-  Activity
+  Activity,
+  LogOut
 } from 'lucide-react';
 
 export default function Home() {
@@ -101,17 +104,35 @@ export default function Home() {
                   <p className="text-sm text-gray-500 mt-1">Kurumsal Diş Sağlığı Yönetimi Platformu</p>
                 </div>
               </div>
-              <div className="text-right">
-                <div className="flex items-center space-x-3">
-                  <div className="bg-green-100 p-2 rounded-full">
-                    <Activity className="h-5 w-5 text-green-600" />
+              <div className="flex items-center space-x-6">
+                <div className="text-right">
+                  <div className="flex items-center space-x-3">
+                    <div className="bg-green-100 p-2 rounded-full">
+                      <Activity className="h-5 w-5 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Sistem Durumu</p>
+                      <p className="text-sm font-semibold text-green-600">Aktif</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Sistem Durumu</p>
-                    <p className="text-sm font-semibold text-green-600">Aktif</p>
-                  </div>
+                  <p className="text-xs text-gray-400 mt-2">Son güncelleme: {new Date().toLocaleDateString('tr-TR')}</p>
                 </div>
-                <p className="text-xs text-gray-400 mt-2">Son güncelleme: {new Date().toLocaleDateString('tr-TR')}</p>
+                
+                <button 
+                  onClick={() => {
+                    // LocalStorage ve cookie'leri temizle
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                    document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+                    document.cookie = 'user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+                    // Login sayfasına yönlendir
+                    window.location.href = '/login';
+                  }}
+                  className="bg-red-600 text-white px-4 py-2 rounded-xl hover:bg-red-700 transition-all duration-300 font-semibold flex items-center space-x-2"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span>Çıkış Yap</span>
+                </button>
               </div>
             </div>
           </div>

@@ -1,0 +1,20 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/favicon.ico/route": "/favicon.ico",
+  "/admin/page": "/admin",
+  "/admin/branches/page": "/admin/branches",
+  "/appointments/page": "/appointments",
+  "/admin/users/page": "/admin/users",
+  "/branches/new/page": "/branches/new",
+  "/login/page": "/login",
+  "/branches/page": "/branches",
+  "/calendar/page": "/calendar",
+  "/invoices/page": "/invoices",
+  "/appointments/new/page": "/appointments/new",
+  "/page": "/",
+  "/patients/new/page": "/patients/new",
+  "/reports/page": "/reports",
+  "/notes/page": "/notes",
+  "/treatments/page": "/treatments",
+  "/patients/page": "/patients"
+}

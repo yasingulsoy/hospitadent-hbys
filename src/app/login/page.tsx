@@ -42,21 +42,47 @@ export default function LoginPage() {
       });
 
       const data: LoginResponse = await response.json();
+      
+      console.log('Giriş yanıtı:', data);
 
       if (data.success && data.user && data.token) {
-        // Token'ı localStorage'a kaydet
+        console.log('Giriş başarılı, kullanıcı:', data.user);
+        console.log('Kullanıcı rolü:', data.user.role);
+        
+        // Token'ı localStorage ve cookie'ye kaydet
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
+        
+        // Cookie'ye de kaydet (middleware için)
+        document.cookie = `token=${data.token}; path=/; max-age=86400`; // 24 saat
+        document.cookie = `user=${JSON.stringify(data.user)}; path=/; max-age=86400`; // 24 saat
 
         // Role göre yönlendir
         if (data.user.role === 1 || data.user.role === 2) {
+          console.log('Admin paneline yönlendiriliyor...');
           // Admin yetkisi - Admin paneline git
-          router.push('/admin');
+          try {
+            await router.push('/admin');
+            console.log('Yönlendirme tamamlandı');
+          } catch (error) {
+            console.error('Yönlendirme hatası:', error);
+            // Alternatif yöntem
+            window.location.href = '/admin';
+          }
         } else {
+          console.log('Ana sayfaya yönlendiriliyor...');
           // Normal kullanıcı - Ana sayfaya git
-          router.push('/');
+          try {
+            await router.push('/');
+            console.log('Yönlendirme tamamlandı');
+          } catch (error) {
+            console.error('Yönlendirme hatası:', error);
+            // Alternatif yöntem
+            window.location.href = '/';
+          }
         }
       } else {
+        console.log('Giriş başarısız:', data.message);
         setError(data.message || 'Giriş başarısız');
       }
     } catch (error) {

@@ -1,3 +1,5 @@
+'use client';
+
 import Link from 'next/link';
 import { 
   Building2, 
@@ -16,7 +18,9 @@ import {
   Edit,
   Trash2,
   Eye,
-  Download
+  Download,
+  Shield,
+  LogOut
 } from 'lucide-react';
 
 export default function AdminPanel() {
@@ -104,10 +108,25 @@ export default function AdminPanel() {
                   <p className="text-sm text-gray-500 mt-1">Merkezi HBYS Yönetim Sistemi</p>
                 </div>
               </div>
-              <div className="text-right">
+              <div className="flex items-center space-x-4">
                 <Link href="/" className="bg-gray-100 text-gray-700 px-4 py-2 rounded-xl hover:bg-gray-200 transition-all duration-300 font-semibold">
                   Ana Sayfa
                 </Link>
+                <button 
+                  onClick={() => {
+                    // LocalStorage ve cookie'leri temizle
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                    document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+                    document.cookie = 'user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+                    // Login sayfasına yönlendir
+                    window.location.href = '/login';
+                  }}
+                  className="bg-red-600 text-white px-4 py-2 rounded-xl hover:bg-red-700 transition-all duration-300 font-semibold flex items-center space-x-2"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span>Çıkış Yap</span>
+                </button>
               </div>
             </div>
           </div>
