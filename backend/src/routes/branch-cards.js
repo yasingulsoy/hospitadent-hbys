@@ -272,4 +272,118 @@ router.post('/test-query', async (req, res) => {
   }
 });
 
+// Şube kartları için dinamik veri çek
+router.post('/execute-cards', async (req, res) => {
+  try {
+    const { branch_id } = req.body;
+
+    if (!branch_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Şube ID gerekli'
+      });
+    }
+
+    // Şubenin aktif kartlarını getir
+    const cardsResult = await pool.query(`
+      SELECT * FROM branch_cards 
+      WHERE branch_id = $1 AND is_active = true 
+      ORDER BY order_index
+    `, [branch_id]);
+
+    if (cardsResult.rows.length === 0) {
+      return res.json({
+        success: true,
+        data: []
+      });
+    }
+
+    // Her kart için SQL sorgusunu çalıştır
+    const executedCards = await Promise.all(
+      cardsResult.rows.map(async (card) => {
+        try {
+          if (!card.sql_query || !card.sql_query.trim()) {
+            return {
+              ...card,
+              executed_value: null,
+              formatted_value: 'Veri yok',
+              error: null
+            };
+          }
+
+          // SQL injection koruması
+          const lowerQuery = card.sql_query.toLowerCase();
+          if (lowerQuery.includes('drop') || lowerQuery.includes('delete') || lowerQuery.includes('truncate')) {
+            return {
+              ...card,
+              executed_value: null,
+              formatted_value: 'Güvenlik hatası',
+              error: 'Bu tür SQL komutlarına izin verilmiyor'
+            };
+          }
+
+          // SQL sorgusunu çalıştır
+          const result = await pool.query(card.sql_query, [branch_id]);
+          
+          let executedValue = null;
+          let formattedValue = '0';
+
+          if (result.rows.length > 0) {
+            // İlk satırın ilk kolonunu al
+            const firstRow = result.rows[0];
+            const firstColumn = Object.keys(firstRow)[0];
+            executedValue = firstRow[firstColumn];
+
+            // Veri tipine göre formatla
+            switch (card.data_type) {
+              case 'currency':
+                formattedValue = `₺${Number(executedValue || 0).toLocaleString('tr-TR')}`;
+                break;
+              case 'percentage':
+                formattedValue = `%${Number(executedValue || 0).toFixed(2)}`;
+                break;
+              case 'number':
+                formattedValue = Number(executedValue || 0).toLocaleString('tr-TR');
+                break;
+              case 'date':
+                formattedValue = executedValue ? new Date(executedValue).toLocaleDateString('tr-TR') : 'Tarih yok';
+                break;
+              default:
+                formattedValue = String(executedValue || 'Veri yok');
+            }
+          }
+
+          return {
+            ...card,
+            executed_value: executedValue,
+            formatted_value: formattedValue,
+            error: null
+          };
+
+        } catch (error) {
+          console.error(`Kart ${card.id} çalıştırılırken hata:`, error);
+          return {
+            ...card,
+            executed_value: null,
+            formatted_value: 'Hata',
+            error: error.message
+          };
+        }
+      })
+    );
+
+    res.json({
+      success: true,
+      data: executedCards
+    });
+
+  } catch (error) {
+    console.error('Execute cards error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Kartlar çalıştırılırken hata oluştu: ' + error.message
+    });
+  }
+});
+
 module.exports = router;

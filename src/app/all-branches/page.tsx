@@ -72,7 +72,7 @@ export default function AllBranchesPage() {
       setLoading(true);
       
       // PostgreSQL'den tüm şubeleri al
-      const branchesResponse = await fetch('/api/branches');
+      const branchesResponse = await fetch('http://localhost:5000/api/branches');
       if (!branchesResponse.ok) {
         throw new Error('Şubeler yüklenemedi');
       }
@@ -84,9 +84,9 @@ export default function AllBranchesPage() {
       
       // Her şube için kart verilerini al
       const branchesWithCards = await Promise.all(
-        branchesData.branches.map(async (branch: Branch) => {
+        branchesData.data.map(async (branch: Branch) => {
           try {
-            const response = await fetch('/api/test-db/branch-cards/data', {
+            const response = await fetch('http://localhost:5000/api/branch-cards/execute-cards', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ branch_id: branch.id })
@@ -95,22 +95,31 @@ export default function AllBranchesPage() {
             let cards = [];
             if (response.ok) {
               const data = await response.json();
-              if (data.success && data.cards) {
-                cards = data.cards;
+              if (data.success && data.data) {
+                cards = data.data;
               }
             }
+            
+            // Kart verilerini işle ve formatla
+            const processCardData = (cardTitle: string, defaultValue: string) => {
+              const card = cards.find((c: any) => c.card_title === cardTitle);
+              if (card && card.formatted_value && card.formatted_value !== 'Veri yok' && card.formatted_value !== 'Hata') {
+                return card.formatted_value;
+              }
+              return defaultValue;
+            };
             
             return {
               id: branch.id,
               name: branch.name,
               code: branch.code,
-              location: branch.location || 'Belirtilmemiş',
-              patients: cards.find((c: CardData) => c.card_title === 'Hasta Sayısı')?.formatted_value || '0',
-              appointments: cards.find((c: CardData) => c.card_title === 'Bugünkü Randevu')?.formatted_value || '0',
-              revenue: cards.find((c: CardData) => c.card_title === 'Aylık Gelir')?.formatted_value || '₺0',
-              manager: cards.find((c: CardData) => c.card_title === 'Şube Müdürü')?.formatted_value || 'Belirtilmemiş',
-              status: branch.status || 'active',
-              lastActivity: branch.last_activity || 'Bilinmiyor',
+              location: branch.province || branch.address || 'Belirtilmemiş',
+              patients: processCardData('Hasta Sayısı', '0'),
+              appointments: processCardData('Bugünkü Randevu', '0'),
+              revenue: processCardData('Aylık Gelir', '₺0'),
+              manager: branch.manager_name || 'Atanmamış',
+              status: branch.is_active ? 'active' : 'inactive',
+              lastActivity: 'Bilinmiyor',
               cards: cards
             };
           } catch (error) {
@@ -363,9 +372,7 @@ export default function AllBranchesPage() {
                   </div>
                 </div>
 
-                <div className="text-xs text-gray-400 mb-4">
-                  Son aktivite: {branch.lastActivity}
-                </div>
+                                   {/* Son aktivite kaldırıldı - gereksiz */}
 
                 {canSeeAdmin ? (
                   <div className="flex space-x-3">

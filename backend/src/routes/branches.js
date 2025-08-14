@@ -191,6 +191,8 @@ router.put('/:id', async (req, res) => {
     // Manager ID'yi kontrol et - boşsa NULL yap
     const finalManagerId = manager_id && manager_id !== '' && manager_id !== null ? parseInt(manager_id) : null;
     
+    console.log('Güncellenecek manager_id:', finalManagerId); // Debug log
+    
     // Şubeyi güncelle
     const result = await pool.query(`
       UPDATE branches 
@@ -207,11 +209,24 @@ router.put('/:id', async (req, res) => {
       WHERE id = $10
       RETURNING *
     `, [name, code, province, address, phone, email, finalManagerId, timezone, is_active, id]);
+    
+    console.log('Update sonucu:', result.rows[0]); // Debug log
+
+    // Güncellenmiş şubeyi manager bilgileri ile birlikte getir
+    const updatedBranch = await pool.query(`
+      SELECT 
+        b.*,
+        u.username as manager_name,
+        u.email as manager_email
+      FROM branches b
+      LEFT JOIN users u ON b.manager_id = u.id
+      WHERE b.id = $1
+    `, [id]);
 
     res.json({
       success: true,
       message: 'Şube başarıyla güncellendi',
-      data: result.rows[0]
+      data: updatedBranch.rows[0]
     });
 
   } catch (error) {

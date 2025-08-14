@@ -97,6 +97,8 @@ export default function BranchesPage() {
 
     try {
       console.log('Gönderilecek veri:', editingBranch); // Debug için
+      console.log('Manager ID:', editingBranch.manager_id); // Debug için
+      console.log('Manager Name:', editingBranch.manager_name); // Debug için
       
       const response = await fetch(`http://localhost:5000/api/branches/${editingBranch.id}`, {
         method: 'PUT',
@@ -108,6 +110,7 @@ export default function BranchesPage() {
 
       const data = await response.json();
       console.log('Backend yanıtı:', data); // Debug için
+      console.log('Güncellenmiş şube:', data.data); // Debug için
       
       if (data.success) {
         await loadBranches(); // Şubeleri yeniden yükle
