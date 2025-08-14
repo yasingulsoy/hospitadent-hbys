@@ -385,24 +385,62 @@ export default function ReportDetailPage() {
         return (
           <div className="bg-white p-6 rounded-xl shadow-lg">
             <h3 className="text-lg font-semibold mb-4 text-gray-800">Bar Grafik - {yAxis} vs {xAxis}</h3>
-            <div className="h-64 flex items-end justify-center space-x-3">
+            <div className="h-64 flex items-end justify-center space-x-3 relative">
+              {/* Y ekseni etiketleri */}
+              <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-xs text-gray-500 pr-2">
+                {[0, 25, 50, 75, 100].map(percent => (
+                  <span key={percent} className="transform -translate-y-1/2">
+                    {Math.round((maxBarValue * percent) / 100)}
+                  </span>
+                ))}
+              </div>
+              
+              {/* Grid çizgileri */}
+              <div className="absolute inset-0 flex flex-col justify-between">
+                {[0, 25, 50, 75, 100].map(percent => (
+                  <div key={percent} className="border-t border-gray-200 w-full"></div>
+                ))}
+              </div>
+              
+              {/* Bar'lar */}
               {barData.map((item, index) => {
                 const value = getSafeValue(item, yAxis);
                 const barHeight = maxBarValue > 0 ? (value / maxBarValue) * 200 : 0;
                 const label = getSafeString(item, xAxis).substring(0, 12);
+                const percentage = maxBarValue > 0 ? (value / maxBarValue) * 100 : 0;
                 
                 return (
-                  <div key={index} className="flex flex-col items-center">
+                  <div key={index} className="flex flex-col items-center relative group">
+                    {/* Tooltip */}
+                    <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                      <div className="text-center">
+                        <div className="font-semibold">{label}</div>
+                        <div>{value} ({percentage.toFixed(1)}%)</div>
+                      </div>
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                    </div>
+                    
+                    {/* Bar */}
                     <div className="relative">
                       <div 
-                        className="w-10 bg-gradient-to-t from-blue-600 to-blue-400 rounded-t shadow-md transition-all duration-300 hover:from-blue-700 hover:to-blue-500 hover:scale-105"
-                        style={{ height: `${Math.max(barHeight, 4)}px` }}
-                      ></div>
-                      <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 text-xs font-medium text-gray-700 bg-white px-1 rounded shadow-sm">
+                        className="w-12 bg-gradient-to-t from-blue-600 via-blue-500 to-blue-400 rounded-t shadow-lg transition-all duration-500 hover:from-blue-700 hover:via-blue-600 hover:to-blue-500 hover:shadow-xl hover:scale-105 cursor-pointer"
+                        style={{ 
+                          height: `${Math.max(barHeight, 4)}px`,
+                          animationDelay: `${index * 100}ms`
+                        }}
+                      >
+                        {/* Bar içi desen */}
+                        <div className="w-full h-full bg-gradient-to-t from-blue-600 via-blue-500 to-blue-400 rounded-t opacity-90"></div>
+                      </div>
+                      
+                      {/* Değer etiketi */}
+                      <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 text-xs font-bold text-gray-700 bg-white px-2 py-1 rounded shadow-sm border border-gray-200">
                         {value}
                       </div>
                     </div>
-                    <span className="text-xs mt-2 text-gray-600 text-center w-16 font-medium">
+                    
+                    {/* X ekseni etiketi */}
+                    <span className="text-xs mt-3 text-gray-600 text-center w-16 font-medium leading-tight">
                       {label}
                     </span>
                   </div>
@@ -419,40 +457,100 @@ export default function ReportDetailPage() {
         return (
           <div className="bg-white p-6 rounded-xl shadow-lg">
             <h3 className="text-lg font-semibold mb-4 text-gray-800">Çizgi Grafik - {yAxis} Trendi</h3>
-            <div className="h-64 flex items-center justify-center">
+            <div className="h-64 flex items-center justify-center relative">
+              {/* Y ekseni etiketleri */}
+              <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-xs text-gray-500 pr-2">
+                {[0, 25, 50, 75, 100].map(percent => (
+                  <span key={percent} className="transform -translate-y-1/2">
+                    {Math.round((maxLineValue * percent) / 100)}
+                  </span>
+                ))}
+              </div>
+              
+              {/* Grid çizgileri */}
+              <div className="absolute inset-0 flex flex-col justify-between">
+                {[0, 25, 50, 75, 100].map(percent => (
+                  <div key={percent} className="border-t border-gray-200 w-full"></div>
+                ))}
+              </div>
+              
               <svg className="w-full h-full" viewBox="0 0 400 200">
                 <defs>
                   <linearGradient id="lineGradient" x1="0%" y1="0%" x2="0%" y2="100%">
                     <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.8"/>
-                    <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.2"/>
+                    <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.1"/>
                   </linearGradient>
+                  <filter id="glow">
+                    <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                    <feMerge> 
+                      <feMergeNode in="coloredBlur"/>
+                      <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                  </filter>
                 </defs>
-                <polyline
+                
+                {/* Alan dolgusu */}
+                <path
                   fill="url(#lineGradient)"
+                  d={`M 0,200 ${lineData.map((item, index) => {
+                    const x = (index / (lineData.length - 1)) * 400;
+                    const y = maxLineValue > 0 ? 200 - (getSafeValue(item, yAxis) / maxLineValue) * 180 : 200;
+                    return `L ${x},${y}`;
+                  }).join(' ')} L 400,200 Z`}
+                  opacity="0.3"
+                />
+                
+                {/* Ana çizgi */}
+                <polyline
+                  fill="none"
                   stroke="#3b82f6"
-                  strokeWidth="3"
+                  strokeWidth="4"
                   strokeLinecap="round"
                   strokeLinejoin="round"
+                  filter="url(#glow)"
                   points={lineData.map((item, index) => {
                     const x = (index / (lineData.length - 1)) * 400;
                     const y = maxLineValue > 0 ? 200 - (getSafeValue(item, yAxis) / maxLineValue) * 180 : 200;
                     return `${x},${y}`;
                   }).join(' ')}
                 />
+                
                 {/* Noktalar */}
                 {lineData.map((item, index) => {
                   const x = (index / (lineData.length - 1)) * 400;
                   const y = maxLineValue > 0 ? 200 - (getSafeValue(item, yAxis) / maxLineValue) * 180 : 200;
+                  const value = getSafeValue(item, yAxis);
+                  
                   return (
-                    <circle
-                      key={index}
-                      cx={x}
-                      cy={y}
-                      r="4"
-                      fill="#3b82f6"
-                      stroke="white"
-                      strokeWidth="2"
-                    />
+                    <g key={index}>
+                      {/* Hover alanı */}
+                      <circle
+                        cx={x}
+                        cy={y}
+                        r="12"
+                        fill="transparent"
+                        className="cursor-pointer hover:fill-blue-100 hover:fill-opacity-30 transition-all duration-200"
+                      />
+                      {/* Ana nokta */}
+                      <circle
+                        cx={x}
+                        cy={y}
+                        r="6"
+                        fill="#3b82f6"
+                        stroke="white"
+                        strokeWidth="3"
+                        className="transition-all duration-200 hover:r-8"
+                      />
+                      {/* Tooltip */}
+                      <text
+                        x={x}
+                        y={y - 15}
+                        textAnchor="middle"
+                        className="text-xs font-medium fill-gray-700 opacity-0 hover:opacity-100 transition-opacity duration-200"
+                      >
+                        {value}
+                      </text>
+                    </g>
                   );
                 })}
               </svg>
@@ -468,29 +566,69 @@ export default function ReportDetailPage() {
         return (
           <div className="bg-white p-6 rounded-xl shadow-lg">
             <h3 className="text-lg font-semibold mb-4 text-gray-800">Scatter Plot - {xAxis} vs {yAxis}</h3>
-            <div className="h-64 flex items-center justify-center">
-              <svg className="w-full h-full" viewBox="0 0 400 200">
-                {/* Grid lines */}
+            <div className="h-64 flex items-center justify-center relative">
+              {/* Grid çizgileri */}
+              <div className="absolute inset-0">
                 {[0, 1, 2, 3, 4].map(i => (
-                  <g key={i}>
-                    <line x1={i * 100} y1="0" x2={i * 100} y2="200" stroke="#e5e7eb" strokeWidth="1"/>
-                    <line x1="0" y1={i * 50} x2="400" y2={i * 50} stroke="#e5e7eb" strokeWidth="1"/>
-                  </g>
+                  <div key={i} className="absolute w-full h-full">
+                    <div 
+                      className="absolute top-0 w-full border-t border-gray-200"
+                      style={{ top: `${i * 25}%` }}
+                    ></div>
+                    <div 
+                      className="absolute left-0 h-full border-l border-gray-200"
+                      style={{ left: `${i * 25}%` }}
+                    ></div>
+                  </div>
                 ))}
-                {/* Scatter points */}
+              </div>
+              
+              <svg className="w-full h-full" viewBox="0 0 400 200">
+                {/* Eksen etiketleri */}
+                <text x="200" y="195" textAnchor="middle" className="text-xs fill-gray-600 font-medium">
+                  {xAxis}
+                </text>
+                <text x="10" y="100" textAnchor="middle" className="text-xs fill-gray-600 font-medium transform rotate-90">
+                  {yAxis}
+                </text>
+                
+                {/* Scatter noktaları */}
                 {scatterData.map((item, index) => {
                   const x = maxX > 0 ? (getSafeValue(item, xAxis) / maxX) * 400 : 0;
                   const y = maxY > 0 ? 200 - (getSafeValue(item, yAxis) / maxY) * 180 : 200;
+                  const value = getSafeValue(item, yAxis);
+                  
                   return (
-                    <circle
-                      key={index}
-                      cx={x}
-                      cy={y}
-                      r="6"
-                      fill="#3b82f6"
-                      opacity="0.7"
-                      className="hover:r-8 transition-all duration-200"
-                    />
+                    <g key={index} className="cursor-pointer group">
+                      {/* Hover alanı */}
+                      <circle
+                        cx={x}
+                        cy={y}
+                        r="15"
+                        fill="transparent"
+                        className="hover:fill-blue-100 hover:fill-opacity-30 transition-all duration-200"
+                      />
+                      {/* Ana nokta */}
+                      <circle
+                        cx={x}
+                        cy={y}
+                        r="8"
+                        fill="#3b82f6"
+                        opacity="0.8"
+                        className="transition-all duration-300 group-hover:r-12 group-hover:opacity-100 group-hover:fill-blue-500"
+                        stroke="white"
+                        strokeWidth="2"
+                      />
+                      {/* Tooltip */}
+                      <text
+                        x={x}
+                        y={y - 20}
+                        textAnchor="middle"
+                        className="text-xs font-medium fill-gray-700 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                      >
+                        {value}
+                      </text>
+                    </g>
                   );
                 })}
               </svg>
@@ -509,32 +647,68 @@ export default function ReportDetailPage() {
           <div className="bg-white p-6 rounded-xl shadow-lg">
             <h3 className="text-lg font-semibold mb-4 text-gray-800">Heatmap - Sayısal Değişkenler</h3>
             <div className="h-64 flex items-center justify-center">
-              <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${heatmapColumns.length}, 1fr)` }}>
-                {heatmapData.map((row, rowIndex) => 
-                  heatmapColumns.map((col, colIndex) => {
-                    const value = getSafeValue(row, col);
-                    const intensity = maxHeatmapValue > 0 ? value / maxHeatmapValue : 0;
-                    const color = `rgba(59, 130, 246, ${0.3 + intensity * 0.7})`;
-                    
-                    return (
-                      <div
-                        key={`${rowIndex}-${colIndex}`}
-                        className="w-8 h-8 rounded border border-gray-200 flex items-center justify-center text-xs text-white font-bold"
-                        style={{ backgroundColor: color }}
-                        title={`${col}: ${value}`}
-                      >
-                        {value > 0 ? Math.round(value) : ''}
-                      </div>
-                    );
-                  })
-                )}
+              <div className="space-y-2">
+                {/* Kolon başlıkları */}
+                <div className="flex gap-1 mb-2">
+                  {heatmapColumns.map((col, colIndex) => (
+                    <div key={colIndex} className="w-8 text-center text-xs font-medium text-gray-600">
+                      {col.substring(0, 8)}
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Heatmap grid */}
+                <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${heatmapColumns.length}, 1fr)` }}>
+                  {heatmapData.map((row, rowIndex) => 
+                    heatmapColumns.map((col, colIndex) => {
+                      const value = getSafeValue(row, col);
+                      const intensity = maxHeatmapValue > 0 ? value / maxHeatmapValue : 0;
+                      const color = `rgba(59, 130, 246, ${0.2 + intensity * 0.8})`;
+                      
+                      return (
+                        <div
+                          key={`${rowIndex}-${colIndex}`}
+                          className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-xs text-white font-bold cursor-pointer transition-all duration-200 hover:scale-110 hover:shadow-lg group relative"
+                          style={{ backgroundColor: color }}
+                          title={`${col}: ${value}`}
+                        >
+                          {value > 0 ? Math.round(value) : ''}
+                          
+                          {/* Tooltip */}
+                          <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                            <div className="text-center">
+                              <div className="font-semibold">{col}</div>
+                              <div>Değer: {value}</div>
+                              <div>Yoğunluk: {(intensity * 100).toFixed(1)}%</div>
+                            </div>
+                            <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+                
+                {/* Satır numaraları */}
+                <div className="flex gap-1 mt-2">
+                  {heatmapData.slice(0, 5).map((_, rowIndex) => (
+                    <div key={rowIndex} className="w-8 text-center text-xs font-medium text-gray-600">
+                      {rowIndex + 1}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-            <div className="mt-4 text-center text-sm text-gray-600">
-              <div className="flex items-center justify-center space-x-2">
-                <span>Düşük</span>
-                <div className="w-20 h-3 bg-gradient-to-r from-blue-300 to-blue-600 rounded"></div>
-                <span>Yüksek</span>
+            
+            {/* Renk skalası */}
+            <div className="mt-4 text-center">
+              <div className="flex items-center justify-center space-x-2 mb-2">
+                <span className="text-sm text-gray-600">Düşük</span>
+                <div className="w-32 h-4 bg-gradient-to-r from-blue-200 via-blue-400 to-blue-600 rounded-lg shadow-inner"></div>
+                <span className="text-sm text-gray-600">Yüksek</span>
+              </div>
+              <div className="text-xs text-gray-500">
+                Maksimum değer: {Math.round(maxHeatmapValue)}
               </div>
             </div>
           </div>
@@ -562,27 +736,31 @@ export default function ReportDetailPage() {
                     const color = colors[index % colors.length];
                     
                     return (
-                      <g key={index}>
+                      <g key={index} className="cursor-pointer group">
                         <path
                           d={`M 50 50 L ${50 + 40 * Math.cos(startAngle * Math.PI / 180)} ${50 + 40 * Math.sin(startAngle * Math.PI / 180)} A 40 40 0 ${endAngle - startAngle > 180 ? 1 : 0} 1 ${50 + 40 * Math.cos(endAngle * Math.PI / 180)} ${50 + 40 * Math.sin(endAngle * Math.PI / 180)} Z`}
                           fill={color}
                           stroke="white"
-                          strokeWidth="0.5"
+                          strokeWidth="1"
+                          className="transition-all duration-300 group-hover:stroke-2 group-hover:stroke-gray-800"
                         />
                       </g>
                     );
                   })}
                 </svg>
+                
+                {/* Merkez bilgi */}
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-800">{totalValue}</div>
+                    <div className="text-2xl font-bold text-gray-800">{Math.round(totalValue)}</div>
                     <div className="text-sm text-gray-600">Toplam</div>
                   </div>
                 </div>
               </div>
             </div>
+            
             {/* Legend */}
-            <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+            <div className="mt-6 grid grid-cols-2 gap-3 text-sm">
               {pieData.map((item, index) => {
                 const value = getSafeValue(item, yAxis);
                 const percentage = totalValue > 0 ? (value / totalValue) * 100 : 0;
@@ -590,11 +768,16 @@ export default function ReportDetailPage() {
                 const color = colors[index % colors.length];
                 
                 return (
-                  <div key={index} className="flex items-center space-x-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }}></div>
-                    <span className="text-gray-700 font-medium">
-                      {getSafeString(item, xAxis).substring(0, 15)}: {percentage.toFixed(1)}%
-                    </span>
+                  <div key={index} className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer group">
+                    <div className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: color }}></div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-gray-700 truncate" title={getSafeString(item, xAxis)}>
+                        {getSafeString(item, xAxis).substring(0, 15)}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {value} ({percentage.toFixed(1)}%)
+                      </div>
+                    </div>
                   </div>
                 );
               })}
@@ -609,24 +792,90 @@ export default function ReportDetailPage() {
         return (
           <div className="bg-white p-6 rounded-xl shadow-lg">
             <h3 className="text-lg font-semibold mb-4 text-gray-800">Alan Grafik - {yAxis} Trendi</h3>
-            <div className="h-64 flex items-center justify-center">
+            <div className="h-64 flex items-center justify-center relative">
+              {/* Y ekseni etiketleri */}
+              <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-xs text-gray-500 pr-2">
+                {[0, 25, 50, 75, 100].map(percent => (
+                  <span key={percent} className="transform -translate-y-1/2">
+                    {Math.round((maxAreaValue * percent) / 100)}
+                  </span>
+                ))}
+              </div>
+              
+              {/* Grid çizgileri */}
+              <div className="absolute inset-0 flex flex-col justify-between">
+                {[0, 25, 50, 75, 100].map(percent => (
+                  <div key={percent} className="border-t border-gray-200 w-full"></div>
+                ))}
+              </div>
+              
               <svg className="w-full h-full" viewBox="0 0 400 200">
                 <defs>
                   <linearGradient id="areaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.6"/>
+                    <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.7"/>
+                    <stop offset="50%" stopColor="#3b82f6" stopOpacity="0.4"/>
                     <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.1"/>
                   </linearGradient>
+                  <filter id="areaGlow">
+                    <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+                    <feMerge> 
+                      <feMergeNode in="coloredBlur"/>
+                      <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                  </filter>
                 </defs>
+                
+                {/* Alan dolgusu */}
                 <path
                   fill="url(#areaGradient)"
                   stroke="#3b82f6"
-                  strokeWidth="2"
+                  strokeWidth="3"
+                  filter="url(#areaGlow)"
                   d={`M 0,200 ${areaData.map((item, index) => {
                     const x = (index / (areaData.length - 1)) * 400;
                     const y = maxAreaValue > 0 ? 200 - (getSafeValue(item, yAxis) / maxAreaValue) * 180 : 200;
                     return `L ${x},${y}`;
                   }).join(' ')} L 400,200 Z`}
                 />
+                
+                {/* Noktalar */}
+                {areaData.map((item, index) => {
+                  const x = (index / (areaData.length - 1)) * 400;
+                  const y = maxAreaValue > 0 ? 200 - (getSafeValue(item, yAxis) / maxAreaValue) * 180 : 200;
+                  const value = getSafeValue(item, yAxis);
+                  
+                  return (
+                    <g key={index} className="cursor-pointer group">
+                      {/* Hover alanı */}
+                      <circle
+                        cx={x}
+                        cy={y}
+                        r="12"
+                        fill="transparent"
+                        className="hover:fill-blue-100 hover:fill-opacity-30 transition-all duration-200"
+                      />
+                      {/* Ana nokta */}
+                      <circle
+                        cx={x}
+                        cy={y}
+                        r="5"
+                        fill="#3b82f6"
+                        stroke="white"
+                        strokeWidth="2"
+                        className="transition-all duration-200 group-hover:r-7 group-hover:fill-blue-500"
+                      />
+                      {/* Tooltip */}
+                      <text
+                        x={x}
+                        y={y - 15}
+                        textAnchor="middle"
+                        className="text-xs font-medium fill-gray-700 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                      >
+                        {value}
+                      </text>
+                    </g>
+                  );
+                })}
               </svg>
             </div>
           </div>

@@ -1,4 +1,6 @@
 {
   "/reports/[id]/page": "app/reports/[id]/page.js",
+  "/admin/database/page": "app/admin/database/page.js",
+  "/page": "app/page.js",
   "/reports/page": "app/reports/page.js"
 }
