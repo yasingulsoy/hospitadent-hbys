@@ -5,22 +5,17 @@ import {
   Building2, 
   Users, 
   Calendar, 
-  Stethoscope, 
   FileText, 
   BarChart3,
   Settings,
-  UserPlus,
-  Database,
   Code,
-  Save,
-  Play,
   Plus,
   Edit,
   Trash2,
   Eye,
-  Download,
   Shield,
-  LogOut
+  LogOut,
+  Play
 } from 'lucide-react';
 
 export default function AdminPanel() {

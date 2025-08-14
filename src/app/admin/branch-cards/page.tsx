@@ -6,7 +6,6 @@ import {
   Plus, 
   Edit, 
   Trash2, 
-  Eye, 
   ArrowLeft,
   Users,
   Calendar,
@@ -14,19 +13,35 @@ import {
   Activity,
   Code,
   Save,
-  Play,
-  Settings,
   Shield
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+// Tip tanımlamaları
+interface BranchCard {
+  id?: number;
+  branch_id: number;
+  card_title: string;
+  card_subtitle?: string;
+  card_icon: string;
+  color: string;
+  order_index: number;
+  is_active: boolean;
+}
+
+interface Branch {
+  id: number;
+  name: string;
+  location?: string;
+}
+
 export default function BranchCardsManagement() {
   const [role, setRole] = useState<number | null>(null);
-  const [branchCards, setBranchCards] = useState<any[]>([]);
-  const [branches, setBranches] = useState<any[]>([]);
+  const [branchCards, setBranchCards] = useState<BranchCard[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [editingCard, setEditingCard] = useState<any>(null);
+  const [editingCard, setEditingCard] = useState<BranchCard | null>(null);
 
   useEffect(() => {
     try {
@@ -66,7 +81,7 @@ export default function BranchCardsManagement() {
   // Şubeleri yükle
   const loadBranches = async () => {
     try {
-      const response = await fetch('/api/test-db/branches');
+      const response = await fetch('/api/branches');
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
@@ -79,7 +94,7 @@ export default function BranchCardsManagement() {
   };
 
   // Şube kartı ekle/güncelle
-  const saveBranchCard = async (cardData: any) => {
+  const saveBranchCard = async (cardData: BranchCard) => {
     try {
       const url = editingCard ? `/api/test-db/branch-cards/${editingCard.id}` : '/api/test-db/branch-cards';
       const method = editingCard ? 'PUT' : 'POST';
@@ -194,14 +209,14 @@ export default function BranchCardsManagement() {
             <form onSubmit={(e) => {
               e.preventDefault();
               const formData = new FormData(e.currentTarget);
-              const cardData = {
+              const cardData: BranchCard = {
                 branch_id: parseInt(formData.get('branch_id') as string),
-                title: formData.get('title') as string,
-                subtitle: formData.get('subtitle') as string,
-                icon: formData.get('icon') as string,
+                card_title: formData.get('card_title') as string,
+                card_subtitle: formData.get('card_subtitle') as string,
+                card_icon: formData.get('card_icon') as string,
                 color: formData.get('color') as string,
                 order_index: parseInt(formData.get('order_index') as string),
-                queries: []
+                is_active: true // Default to true for new cards
               };
               saveBranchCard(cardData);
             }}>
@@ -227,9 +242,9 @@ export default function BranchCardsManagement() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Kart Başlığı</label>
                   <input
                     type="text"
-                    name="title"
+                    name="card_title"
                     required
-                    defaultValue={editingCard?.title || ''}
+                    defaultValue={editingCard?.card_title || ''}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Örn: Hasta İstatistikleri"
                   />
@@ -239,8 +254,8 @@ export default function BranchCardsManagement() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Alt Başlık</label>
                   <input
                     type="text"
-                    name="subtitle"
-                    defaultValue={editingCard?.subtitle || ''}
+                    name="card_subtitle"
+                    defaultValue={editingCard?.card_subtitle || ''}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Örn: Güncel hasta verileri"
                   />
@@ -249,10 +264,10 @@ export default function BranchCardsManagement() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">İkon</label>
                   <select
-                    name="icon"
+                    name="card_icon"
                     required
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    defaultValue={editingCard?.icon || 'users'}
+                    defaultValue={editingCard?.card_icon || 'users'}
                   >
                     <option value="users">👥 Hasta</option>
                     <option value="calendar">📅 Randevu</option>
@@ -350,7 +365,7 @@ export default function BranchCardsManagement() {
                     <div className="flex-1">
                       <h3 className="text-lg font-bold text-gray-900 mb-1">{card.card_title}</h3>
                       <p className="text-sm text-gray-500">{card.card_subtitle}</p>
-                      <p className="text-xs text-gray-400">Şube: {card.branch_name}</p>
+                      <p className="text-xs text-gray-400">Şube ID: {card.branch_id}</p>
                     </div>
                     <div className="flex items-center space-x-2">
                       <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
@@ -393,7 +408,7 @@ export default function BranchCardsManagement() {
                       <span>Düzenle</span>
                     </button>
                     <button
-                      onClick={() => deleteBranchCard(card.id)}
+                      onClick={() => card.id && deleteBranchCard(card.id)}
                       className="flex-1 bg-red-100 text-red-700 px-4 py-2 rounded-xl text-sm text-center hover:bg-red-200 transition-all duration-300 font-semibold flex items-center justify-center space-x-2"
                     >
                       <Trash2 className="h-4 w-4" />

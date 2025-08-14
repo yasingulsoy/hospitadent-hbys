@@ -11,10 +11,8 @@ import {
   Stethoscope,
   CheckCircle,
   AlertCircle,
-  X,
   Edit,
   Trash2,
-  Filter,
   Building2
 } from 'lucide-react';
 

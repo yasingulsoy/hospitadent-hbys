@@ -5,14 +5,10 @@ import Link from 'next/link';
 import { 
   Search, 
   Plus, 
-  Filter, 
-  MoreHorizontal, 
   Edit, 
   Trash2, 
-  Eye,
   Phone,
   Mail,
-  Calendar,
   User
 } from 'lucide-react';
 

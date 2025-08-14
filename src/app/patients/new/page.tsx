@@ -9,7 +9,6 @@ import {
   User, 
   Phone, 
   Mail, 
-  Calendar, 
   MapPin,
   AlertCircle,
   CheckCircle

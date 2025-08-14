@@ -60,14 +60,14 @@ export default function LoginPage() {
         // Giriş sonrası ana sayfaya yönlendir (role bağımsız)
         try {
           await router.push('/');
-        } catch (error) {
+        } catch {
           window.location.href = '/';
         }
       } else {
         console.log('Giriş başarısız:', data.message);
         setError(data.message || 'Giriş başarısız');
       }
-    } catch (error) {
+    } catch {
       setError('Bağlantı hatası oluştu');
     } finally {
       setLoading(false);

@@ -11,12 +11,10 @@ import {
   DollarSign,
   CheckCircle,
   AlertCircle,
-  Clock,
   Edit,
   Trash2,
   Building2,
-  FileText,
-  Activity
+  FileText
 } from 'lucide-react';
 
 // Mock tedavi verileri

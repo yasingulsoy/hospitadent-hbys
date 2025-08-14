@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { 
   Calendar as CalendarIcon, 
@@ -14,9 +14,7 @@ import {
   Building2, 
   Edit, 
   Trash2,
-  Clock,
-  CheckCircle,
-  X
+  CheckCircle
 } from 'lucide-react';
 
 interface Appointment {

@@ -32,7 +32,7 @@ export function middleware(request: NextRequest) {
           return NextResponse.redirect(new URL('/', request.url));
         }
       }
-    } catch (error) {
+    } catch {
       // Token geçersiz - login'e yönlendir
       return NextResponse.redirect(new URL('/login', request.url));
     }

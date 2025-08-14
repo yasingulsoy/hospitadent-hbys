@@ -9,7 +9,11 @@ export const metadata: Metadata = {
   description: "Hospitadent Dental Hastane Bilgi Yönetim Sistemi - Modern ve kapsamlı diş kliniği yönetim sistemi",
   keywords: "dental, hbys, hastane, yönetim, randevu, hasta, tedavi",
   authors: [{ name: "Hospitadent Dental" }],
-  viewport: "width=device-width, initial-scale=1",
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
 };
 
 export default function RootLayout({

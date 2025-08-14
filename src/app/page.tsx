@@ -11,14 +11,66 @@ import {
   Clock,
   Activity,
   LogOut,
-  Shield
+  Shield,
+  BarChart3,
+  PieChart,
+  Target,
+  FileText,
+  TrendingDown,
+  UserCheck,
+  CalendarCheck,
+  DollarSign as DollarSignIcon
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+// Tip tanımlamaları
+interface BranchCard {
+  id: number;
+  branch_name: string;
+  location: string;
+  branch_count: number;
+  cards: CardData[];
+}
+
+interface CardData {
+  card_title: string;
+  formatted_value: string;
+  data_type: string;
+  card_icon?: string;
+}
+
+interface Branch {
+  id: number;
+  name: string;
+  location?: string;
+  branch_count?: number;
+  patients?: number;
+  appointments?: number;
+  revenue?: number;
+  code?: string;
+  manager?: string;
+}
+
+// Kayıtlı sorgu tipi
+interface SavedQuery {
+  id: number;
+  name: string;
+  description: string;
+  sql_query: string;
+  category: string;
+  is_public: boolean;
+  created_by: string;
+  created_at: string;
+  last_run?: string;
+  usage_count?: number;
+}
+
 export default function Home() {
   const [role, setRole] = useState<number | null>(null);
-  const [branchCards, setBranchCards] = useState<any[]>([]);
+  const [branchCards, setBranchCards] = useState<BranchCard[]>([]);
   const [loading, setLoading] = useState(true);
+  const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
+  const [queriesLoading, setQueriesLoading] = useState(true);
 
   useEffect(() => {
     try {
@@ -27,79 +79,86 @@ export default function Home() {
         const user = JSON.parse(userStr);
         setRole(typeof user?.role === 'number' ? user.role : null);
       }
-    } catch {}
+    } catch (error) {
+      console.error('Kullanıcı bilgisi yüklenirken hata:', error);
+    }
     
     // Şube kartlarını yükle
-    loadBranchCards();
+    loadBranchCards().catch(error => {
+      console.error('Şube kartları yüklenirken hata:', error);
+    });
+
+    // Kayıtlı sorguları yükle
+    loadSavedQueries().catch(error => {
+      console.error('Kayıtlı sorgular yüklenirken hata:', error);
+    });
   }, []);
 
   const canSeeAdmin = role === 1 || role === 2;
+
+  // Kayıtlı sorguları yükle
+  const loadSavedQueries = async () => {
+    try {
+      setQueriesLoading(true);
+      const response = await fetch('http://localhost:5000/api/admin/database/save-query');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setSavedQueries(data.queries || []);
+        }
+      }
+    } catch (error) {
+      console.error('Kayıtlı sorgular yüklenirken hata:', error);
+    } finally {
+      setQueriesLoading(false);
+    }
+  };
 
   // Şube kartlarını yükle
   const loadBranchCards = async () => {
     try {
       setLoading(true);
       
-      // Önce tüm şubeleri al
-      const branchesResponse = await fetch('/api/test-db/branches');
-      if (!branchesResponse.ok) {
-        throw new Error('Şubeler yüklenemedi');
-      }
-      
-      const branchesData = await branchesResponse.json();
-      if (!branchesData.success) {
-        throw new Error('Şube verisi alınamadı');
-      }
-      
-      // İlk 9 şubeyi al
-      const first9Branches = branchesData.branches.slice(0, 9);
-      
-      // Her şube için kart verilerini al
-      const cardsPromises = first9Branches.map(async (branch: any) => {
-        try {
-          const response = await fetch('/api/test-db/branch-cards/data', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ branch_id: branch.id })
-          });
-          
-          if (response.ok) {
-            const data = await response.json();
-            if (data.success && data.cards) {
-              return {
-                id: branch.id,
-                branch_name: branch.name,
-                location: branch.location || 'Belirtilmemiş',
-                branch_count: branch.branch_count || 0,
-                cards: data.cards
-              };
-            }
-          }
-          
-          // Hata durumunda boş kart döndür
-          return {
-            id: branch.id,
-            branch_name: branch.name,
-            location: branch.location || 'Belirtilmemiş',
-            branch_count: branch.branch_count || 0,
-            cards: []
-          };
-        } catch (error) {
-          console.error(`Şube ${branch.id} kartları yüklenirken hata:`, error);
-          return {
-            id: branch.id,
-            branch_name: branch.name,
-            location: branch.location || 'Belirtilmemiş',
-            branch_count: branch.branch_count || 0,
-            cards: []
-          };
+      // Basit mock data kullan, eski MySQL API'sini çağırma
+      const mockBranchCards = [
+        {
+          id: 1,
+          branch_name: 'Merkez Şube',
+          location: 'Ana şube',
+          branch_count: 5,
+          cards: [
+            { card_title: 'Hasta Sayısı', formatted_value: '1,234', data_type: 'number' },
+            { card_title: 'Günlük Tahakkuk', formatted_value: '₺45,678', data_type: 'currency' },
+            { card_title: 'Günlük Tahsilat', formatted_value: '₺38,901', data_type: 'currency' }
+          ]
+        },
+        {
+          id: 2,
+          branch_name: 'Kadıköy Şube',
+          location: 'Kadıköy',
+          branch_count: 3,
+          cards: [
+            { card_title: 'Hasta Sayısı', formatted_value: '856', data_type: 'number' },
+            { card_title: 'Günlük Tahakkuk', formatted_value: '₺32,456', data_type: 'currency' },
+            { card_title: 'Günlük Tahsilat', formatted_value: '₺28,123', data_type: 'currency' }
+          ]
+        },
+        {
+          id: 3,
+          branch_name: 'Beşiktaş Şube',
+          location: 'Beşiktaş',
+          branch_count: 4,
+          cards: [
+            { card_title: 'Hasta Sayısı', formatted_value: '1,089', data_type: 'number' },
+            { card_title: 'Günlük Tahakkuk', formatted_value: '₺41,234', data_type: 'currency' },
+            { card_title: 'Günlük Tahsilat', formatted_value: '₺35,678', data_type: 'currency' }
+          ]
         }
-      });
+      ];
       
-      const branchCardsData = await Promise.all(cardsPromises);
-      setBranchCards(branchCardsData);
+      setBranchCards(mockBranchCards);
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Şube kartları yüklenirken hata:', error);
       // Hata durumunda örnek veriler göster
       setBranchCards([
@@ -117,12 +176,23 @@ export default function Home() {
         {
           id: 2,
           branch_name: 'Kadıköy Şube',
-          location: 'İstanbul',
+          location: 'Kadıköy',
           branch_count: 3,
           cards: [
-            { card_title: 'Hasta Sayısı', formatted_value: '987', data_type: 'number' },
+            { card_title: 'Hasta Sayısı', formatted_value: '856', data_type: 'number' },
             { card_title: 'Günlük Tahakkuk', formatted_value: '₺32,456', data_type: 'currency' },
             { card_title: 'Günlük Tahsilat', formatted_value: '₺28,123', data_type: 'currency' }
+          ]
+        },
+        {
+          id: 3,
+          branch_name: 'Beşiktaş Şube',
+          location: 'Beşiktaş',
+          branch_count: 4,
+          cards: [
+            { card_title: 'Hasta Sayısı', formatted_value: '1,089', data_type: 'number' },
+            { card_title: 'Günlük Tahakkuk', formatted_value: '₺41,234', data_type: 'currency' },
+            { card_title: 'Günlük Tahsilat', formatted_value: '₺35,678', data_type: 'currency' }
           ]
         }
       ]);
@@ -131,7 +201,7 @@ export default function Home() {
     }
   };
 
-  const [realBranches, setRealBranches] = useState<any[]>([]);
+  const [realBranches, setRealBranches] = useState<Branch[]>([]);
   const [branchesLoading, setBranchesLoading] = useState(true);
 
   // Gerçek şube verilerini yükle
@@ -142,7 +212,7 @@ export default function Home() {
   const loadRealBranches = async () => {
     try {
       setBranchesLoading(true);
-      const response = await fetch('/api/test-db/branches');
+      const response = await fetch('/api/branches');
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
@@ -161,6 +231,64 @@ export default function Home() {
     totalAppointments: realBranches.reduce((sum, branch) => sum + (branch.appointments || 0), 0),
     totalRevenue: realBranches.reduce((sum, branch) => sum + (branch.revenue || 0), 0),
     activeBranches: realBranches.length
+  };
+
+  // Kategori ikonları
+  const getCategoryIcon = (category: string) => {
+    switch (category.toLowerCase()) {
+      case 'financial':
+      case 'finansal':
+        return <TrendingUp className="h-6 w-6 text-white" />;
+      case 'patient':
+      case 'hasta':
+        return <Users className="h-6 w-6 text-white" />;
+      case 'appointment':
+      case 'randevu':
+        return <Calendar className="h-6 w-6 text-white" />;
+      case 'branch':
+      case 'şube':
+        return <Building2 className="h-6 w-6 text-white" />;
+      case 'treatment':
+      case 'tedavi':
+        return <Activity className="h-6 w-6 text-white" />;
+      case 'personnel':
+      case 'personel':
+        return <UserCheck className="h-6 w-6 text-white" />;
+      case 'time':
+      case 'zaman':
+        return <Clock className="h-6 w-6 text-white" />;
+      default:
+        return <BarChart3 className="h-6 w-6 text-white" />;
+    }
+  };
+
+  // Kategori renkleri
+  const getCategoryColors = (category: string) => {
+    switch (category.toLowerCase()) {
+      case 'financial':
+      case 'finansal':
+        return 'from-green-50 to-emerald-100 border-green-200 bg-green-500 text-green-600 bg-green-100';
+      case 'patient':
+      case 'hasta':
+        return 'from-blue-50 to-indigo-100 border-blue-200 bg-blue-500 text-blue-600 bg-blue-100';
+      case 'appointment':
+      case 'randevu':
+        return 'from-purple-50 to-violet-100 border-purple-200 bg-purple-500 text-purple-600 bg-purple-100';
+      case 'branch':
+      case 'şube':
+        return 'from-orange-50 to-amber-100 border-orange-200 bg-orange-500 text-orange-600 bg-orange-100';
+      case 'treatment':
+      case 'tedavi':
+        return 'from-red-50 to-pink-100 border-red-200 bg-red-500 text-red-600 bg-red-100';
+      case 'personnel':
+      case 'personel':
+        return 'from-indigo-50 to-blue-100 border-indigo-200 bg-indigo-500 text-indigo-600 bg-indigo-100';
+      case 'time':
+      case 'zaman':
+        return 'from-cyan-50 to-blue-100 border-cyan-200 bg-cyan-500 text-cyan-600 bg-cyan-100';
+      default:
+        return 'from-gray-50 to-slate-100 border-gray-200 bg-gray-500 text-gray-600 bg-gray-100';
+    }
   };
 
   return (
@@ -440,7 +568,7 @@ export default function Home() {
                   
                   <div className="space-y-3 mb-6">
                     {branch.cards && branch.cards.length > 0 ? (
-                      branch.cards.map((card: any, index: number) => (
+                      branch.cards.map((card: CardData, index: number) => (
                         <div key={index} className="flex items-center justify-between text-sm">
                           <span className="text-gray-600 flex items-center">
                             {card.card_icon === 'users' && <Users className="h-4 w-4 mr-2" />}
@@ -477,6 +605,81 @@ export default function Home() {
                   )}
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* Dinamik Rapor Kartları - PostgreSQL'den gelen sorgular */}
+        <div className="mt-8 bg-white rounded-2xl shadow-xl p-8 border border-gray-100 mb-8">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Hızlı Raporlar</h2>
+              <p className="text-gray-600 mt-1">PostgreSQL'den dinamik olarak yüklenen kayıtlı sorgular</p>
+            </div>
+            <Link href="/reports" className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all duration-300 font-semibold">
+              Tüm Raporlar →
+            </Link>
+          </div>
+          
+          {queriesLoading ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-4 text-gray-600">Raporlar yükleniyor...</p>
+            </div>
+          ) : savedQueries.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <FileText className="h-16 w-16 mx-auto text-gray-300 mb-4" />
+              <p className="text-lg">Henüz kayıtlı sorgu yok</p>
+              <p className="text-sm">Admin panelinden veritabanı sorguları ekleyebilirsiniz</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* İlk 9 sorguyu göster */}
+              {savedQueries.slice(0, 9).map((query) => {
+                const colors = getCategoryColors(query.category);
+                const [bgGradient, borderColor, iconBg, categoryText, categoryBg] = colors.split(' ');
+                
+                return (
+                  <div key={query.id} className="group">
+                    <div className={`bg-gradient-to-br ${bgGradient} border ${borderColor} rounded-2xl p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group-hover:border-opacity-80 relative overflow-hidden`}>
+                      {/* Üst kısım - İkon ve kategori */}
+                      <div className="flex items-center justify-between mb-4">
+                        <div className={`p-3 ${iconBg} rounded-xl shadow-lg`}>
+                          {getCategoryIcon(query.category)}
+                        </div>
+                        <span className={`text-xs font-semibold ${categoryText} ${categoryBg} px-3 py-1 rounded-full`}>
+                          {query.category || 'Genel'}
+                        </span>
+                      </div>
+                      
+                      {/* Başlık ve açıklama */}
+                      <h3 className="text-lg font-bold text-gray-900 mb-2">{query.name}</h3>
+                      <p className="text-sm text-gray-600 mb-4 line-clamp-2">{query.description || 'Açıklama yok'}</p>
+                      
+                      {/* Alt kısım - Butonlar */}
+                      <div className="flex space-x-2 mt-4">
+                        <button 
+                          onClick={() => window.open(`/reports/${query.id}`, '_blank')}
+                          className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2"
+                        >
+                          <Activity className="h-4 w-4" />
+                          <span>Çalıştır</span>
+                        </button>
+                        <Link 
+                          href={`/reports/${query.id}`}
+                          className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center justify-center space-x-2"
+                        >
+                          <FileText className="h-4 w-4" />
+                          <span>Detaylar</span>
+                        </Link>
+                      </div>
+                      
+                      {/* Hover efekti için arka plan */}
+                      <div className="absolute inset-0 bg-gradient-to-br from-white/0 to-white/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

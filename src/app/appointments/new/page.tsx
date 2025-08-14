@@ -9,12 +9,9 @@ import {
   Calendar, 
   Clock, 
   User, 
-  Stethoscope,
   Building2,
   AlertCircle,
-  CheckCircle,
-  Phone,
-  Mail
+  CheckCircle
 } from 'lucide-react';
 
 export default function NewAppointmentPage() {

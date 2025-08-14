@@ -9,7 +9,6 @@ import {
   TrendingUp, 
   CheckCircle, 
   Clock, 
-  Activity, 
   LogOut, 
   Shield,
   ArrowLeft,
@@ -17,9 +16,39 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+// Tip tanımlamaları
+interface BranchWithCards {
+  id: number;
+  name: string;
+  code: string;
+  location: string;
+  patients: string;
+  appointments: string;
+  revenue: string;
+  manager: string;
+  status: string;
+  lastActivity: string;
+  cards: CardData[];
+}
+
+interface CardData {
+  card_title: string;
+  formatted_value: string;
+  data_type?: string;
+}
+
+interface Branch {
+  id: number;
+  name: string;
+  code: string;
+  location?: string;
+  status?: string;
+  last_activity?: string;
+}
+
 export default function AllBranchesPage() {
   const [role, setRole] = useState<number | null>(null);
-  const [allBranches, setAllBranches] = useState<any[]>([]);
+  const [allBranches, setAllBranches] = useState<BranchWithCards[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -55,7 +84,7 @@ export default function AllBranchesPage() {
       
       // Her şube için kart verilerini al
       const branchesWithCards = await Promise.all(
-        branchesData.branches.map(async (branch: any) => {
+        branchesData.branches.map(async (branch: Branch) => {
           try {
             const response = await fetch('/api/test-db/branch-cards/data', {
               method: 'POST',
@@ -76,10 +105,10 @@ export default function AllBranchesPage() {
               name: branch.name,
               code: branch.code,
               location: branch.location || 'Belirtilmemiş',
-              patients: cards.find((c: any) => c.card_title === 'Hasta Sayısı')?.formatted_value || '0',
-              appointments: cards.find((c: any) => c.card_title === 'Bugünkü Randevu')?.formatted_value || '0',
-              revenue: cards.find((c: any) => c.card_title === 'Aylık Gelir')?.formatted_value || '₺0',
-              manager: cards.find((c: any) => c.card_title === 'Şube Müdürü')?.formatted_value || 'Belirtilmemiş',
+              patients: cards.find((c: CardData) => c.card_title === 'Hasta Sayısı')?.formatted_value || '0',
+              appointments: cards.find((c: CardData) => c.card_title === 'Bugünkü Randevu')?.formatted_value || '0',
+              revenue: cards.find((c: CardData) => c.card_title === 'Aylık Gelir')?.formatted_value || '₺0',
+              manager: cards.find((c: CardData) => c.card_title === 'Şube Müdürü')?.formatted_value || 'Belirtilmemiş',
               status: branch.status || 'active',
               lastActivity: branch.last_activity || 'Bilinmiyor',
               cards: cards

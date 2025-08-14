@@ -17,8 +17,7 @@ import {
   Building2,
   Download,
   Eye,
-  CreditCard,
-  Banknote
+  CreditCard
 } from 'lucide-react';
 
 // Mock fatura verileri

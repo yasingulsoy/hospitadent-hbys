@@ -12,8 +12,7 @@ import {
   MapPin,
   AlertCircle,
   CheckCircle,
-  User,
-  Clock
+  User
 } from 'lucide-react';
 
 export default function NewBranchPage() {

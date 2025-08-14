@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
+import { useState } from 'react';
 import { 
   FileText,
   Plus,
@@ -15,7 +14,6 @@ import {
   Trash2,
   Eye,
   Save,
-  X,
   AlertCircle,
   CheckCircle,
   Clock,
@@ -133,7 +131,6 @@ const statuses = {
 };
 
 export default function NotesPage() {
-  const [notes, setNotes] = useState<Note[]>([]);
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [showNoteModal, setShowNoteModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);

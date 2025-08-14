@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Search, Filter, Eye } from 'lucide-react';
+import { Plus, Edit, Trash2, Search } from 'lucide-react';
 
 interface Branch {
   id: number;
