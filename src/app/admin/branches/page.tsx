@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, Search } from 'lucide-react';
+import Link from 'next/link';
 
 interface Branch {
   id: number;
@@ -12,6 +13,9 @@ interface Branch {
   phone: string;
   email: string;
   manager_id: number | null;
+  manager_name?: string;
+  manager_email?: string;
+  manager_phone?: string;
   is_active: boolean;
   timezone: string;
   created_at: string;
@@ -34,6 +38,7 @@ export default function BranchesPage() {
     phone: '',
     email: '',
     manager_id: '',
+    manager_name: '',
     timezone: 'Europe/Istanbul',
     is_active: true
   });
@@ -79,6 +84,7 @@ export default function BranchesPage() {
           phone: '',
           email: '',
           manager_id: '',
+          manager_name: '',
           timezone: 'Europe/Istanbul',
           is_active: true
         });
@@ -145,6 +151,7 @@ export default function BranchesPage() {
       phone: branch.phone,
       email: branch.email,
       manager_id: branch.manager_id?.toString() || '',
+      manager_name: branch.manager_name || '',
       timezone: branch.timezone,
       is_active: branch.is_active
     });
@@ -180,9 +187,17 @@ export default function BranchesPage() {
     <div className="container mx-auto px-4 py-8">
       {/* Header */}
       <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Şube Yönetimi</h1>
-          <p className="text-gray-600 mt-2">Tüm şubeleri görüntüleyin, ekleyin ve yönetin</p>
+        <div className="flex items-center space-x-4">
+          <Link 
+            href="/admin"
+            className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
+          >
+            ← Geri
+          </Link>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Şube Yönetimi</h1>
+            <p className="text-gray-600 mt-2">Tüm şubeleri görüntüleyin, ekleyin ve yönetin</p>
+          </div>
         </div>
         <button
           onClick={() => setShowAddModal(true)}
@@ -235,7 +250,7 @@ export default function BranchesPage() {
                   İletişim
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Müdür ID
+                  Müdür Bilgileri
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Durum
@@ -261,7 +276,9 @@ export default function BranchesPage() {
                     <div className="text-sm text-gray-500">{branch.email}</div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="text-sm text-gray-900">{branch.manager_id || 'Belirtilmemiş'}</div>
+                    <div className="text-sm text-gray-900">{branch.manager_name || 'Belirtilmemiş'}</div>
+                    <div className="text-sm text-gray-500">{branch.manager_email || 'Belirtilmemiş'}</div>
+                    <div className="text-sm text-gray-500">{branch.manager_phone || 'Belirtilmemiş'}</div>
                   </td>
                   <td className="px-6 py-4">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -394,6 +411,18 @@ export default function BranchesPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Müdür Adı
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.manager_name}
+                    onChange={(e) => setFormData({...formData, manager_name: e.target.value})}
+                    placeholder="Müdür adı girin (opsiyonel)"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
                 <div className="flex items-center">
                   <input
                     type="checkbox"
@@ -515,6 +544,18 @@ export default function BranchesPage() {
                     value={formData.manager_id}
                     onChange={(e) => setFormData({...formData, manager_id: e.target.value})}
                     placeholder="Müdür ID girin (opsiyonel)"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Müdür Adı
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.manager_name}
+                    onChange={(e) => setFormData({...formData, manager_name: e.target.value})}
+                    placeholder="Müdür adı girin (opsiyonel)"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>

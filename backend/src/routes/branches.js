@@ -15,26 +15,31 @@ router.get('/', async (req, res) => {
     let paramIndex = 1;
 
     if (search) {
-      whereClause += `WHERE (name ILIKE $${paramIndex} OR code ILIKE $${paramIndex} OR address ILIKE $${paramIndex})`;
+      whereClause += `WHERE (b.name ILIKE $${paramIndex} OR b.code ILIKE $${paramIndex} OR b.address ILIKE $${paramIndex})`;
       params.push(`%${search}%`);
       paramIndex++;
     }
 
     if (status) {
-      const statusCondition = status === 'active' ? 'AND is_active = true' : 'AND is_active = false';
+      const statusCondition = status === 'active' ? 'AND b.is_active = true' : 'AND b.is_active = false';
       whereClause += whereClause ? ` ${statusCondition}` : `WHERE ${statusCondition}`;
     }
 
     // Toplam sayıyı al
-    const countQuery = `SELECT COUNT(*) FROM branches ${whereClause}`;
+    const countQuery = `SELECT COUNT(*) FROM branches b ${whereClause}`;
     const countResult = await pool.query(countQuery, params);
     const total = parseInt(countResult.rows[0].count);
 
-    // Şubeleri getir
+    // Şubeleri getir (manager bilgileri ile birlikte)
     const query = `
-      SELECT * FROM branches 
+      SELECT 
+        b.*,
+        u.username as manager_name,
+        u.email as manager_email
+      FROM branches b
+      LEFT JOIN users u ON b.manager_id = u.id
       ${whereClause}
-      ORDER BY created_at DESC 
+      ORDER BY b.created_at DESC 
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
     
@@ -66,7 +71,15 @@ router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const result = await pool.query('SELECT * FROM branches WHERE id = $1', [id]);
+    const result = await pool.query(`
+      SELECT 
+        b.*,
+        u.username as manager_name,
+        u.email as manager_email
+      FROM branches b
+      LEFT JOIN users u ON b.manager_id = u.id
+      WHERE b.id = $1
+    `, [id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -114,7 +127,7 @@ router.post('/', async (req, res) => {
     }
 
     // Manager ID'yi kontrol et - boşsa NULL yap
-    const finalManagerId = manager_id && manager_id.trim() !== '' ? parseInt(manager_id) : null;
+    const finalManagerId = manager_id && manager_id !== '' && manager_id !== null ? parseInt(manager_id) : null;
     
     // Yeni şube oluştur
     const result = await pool.query(`
@@ -176,7 +189,7 @@ router.put('/:id', async (req, res) => {
     }
 
     // Manager ID'yi kontrol et - boşsa NULL yap
-    const finalManagerId = manager_id && manager_id.trim() !== '' ? parseInt(manager_id) : null;
+    const finalManagerId = manager_id && manager_id !== '' && manager_id !== null ? parseInt(manager_id) : null;
     
     // Şubeyi güncelle
     const result = await pool.query(`

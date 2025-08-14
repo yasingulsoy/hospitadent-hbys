@@ -19,7 +19,10 @@ import {
   TrendingDown,
   UserCheck,
   CalendarCheck,
-  DollarSign as DollarSignIcon
+  DollarSign as DollarSignIcon,
+  Database,
+  RefreshCw,
+  XCircle
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -49,6 +52,7 @@ interface Branch {
   revenue?: number;
   code?: string;
   manager?: string;
+  manager_name?: string; // Yeni eklenen
 }
 
 // Kayıtlı sorgu tipi
@@ -71,6 +75,16 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
   const [queriesLoading, setQueriesLoading] = useState(true);
+  const [dbConnectionStatus, setDbConnectionStatus] = useState<{
+    isConnected: boolean;
+    lastCheck: string;
+    message: string;
+  }>({
+    isConnected: false,
+    lastCheck: 'Hiç kontrol edilmedi',
+    message: 'Bağlantı durumu bilinmiyor'
+  });
+  const [checkingDbStatus, setCheckingDbStatus] = useState(false);
 
   useEffect(() => {
     try {
@@ -92,9 +106,55 @@ export default function Home() {
     loadSavedQueries().catch(error => {
       console.error('Kayıtlı sorgular yüklenirken hata:', error);
     });
+
+    // Veritabanı bağlantı durumunu kontrol et
+    checkDatabaseConnection().catch(error => {
+      console.error('Veritabanı bağlantı durumu kontrol edilirken hata:', error);
+    });
   }, []);
 
   const canSeeAdmin = role === 1 || role === 2;
+
+  // Veritabanı bağlantı durumunu kontrol et
+  const checkDatabaseConnection = async () => {
+    setCheckingDbStatus(true);
+    try {
+      const response = await fetch('http://localhost:5000/api/admin/database-connections');
+      const data = await response.json();
+      
+      if (data.success && data.connections && data.connections.length > 0) {
+        const activeConnection = data.connections.find((conn: any) => conn.is_active);
+        
+        if (activeConnection) {
+          setDbConnectionStatus({
+            isConnected: true,
+            lastCheck: new Date().toLocaleString('tr-TR'),
+            message: `${activeConnection.name} bağlantısı aktif`
+          });
+        } else {
+          setDbConnectionStatus({
+            isConnected: false,
+            lastCheck: new Date().toLocaleString('tr-TR'),
+            message: 'Aktif bağlantı bulunamadı'
+          });
+        }
+      } else {
+        setDbConnectionStatus({
+          isConnected: false,
+          lastCheck: new Date().toLocaleString('tr-TR'),
+          message: 'Veritabanı bağlantısı bulunamadı'
+        });
+      }
+    } catch (error) {
+      setDbConnectionStatus({
+        isConnected: false,
+        lastCheck: new Date().toLocaleString('tr-TR'),
+        message: 'Bağlantı kontrol edilemedi'
+      });
+    } finally {
+      setCheckingDbStatus(false);
+    }
+  };
 
   // Kayıtlı sorguları yükle
   const loadSavedQueries = async () => {
@@ -212,11 +272,11 @@ export default function Home() {
   const loadRealBranches = async () => {
     try {
       setBranchesLoading(true);
-      const response = await fetch('/api/branches');
+      const response = await fetch('http://localhost:5000/api/branches');
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          setRealBranches(data.branches);
+          setRealBranches(data.data || []);
         }
       }
     } catch (error) {
@@ -359,7 +419,7 @@ export default function Home() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Enhanced Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 relative overflow-hidden">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-bold text-gray-600 uppercase tracking-wider">Aktif Şube</p>
@@ -373,9 +433,11 @@ export default function Home() {
                 <Building2 className="h-10 w-10 text-white" />
               </div>
             </div>
+            {/* Sağ üst köşe dekoratif çizgi */}
+            <div className="absolute top-0 right-0 w-16 h-1 bg-gradient-to-l from-blue-500 to-blue-600 rounded-bl-full"></div>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 relative overflow-hidden">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-bold text-gray-600 uppercase tracking-wider">Toplam Hasta</p>
@@ -389,9 +451,11 @@ export default function Home() {
                 <Users className="h-10 w-10 text-white" />
               </div>
             </div>
+            {/* Sağ üst köşe dekoratif çizgi */}
+            <div className="absolute top-0 right-0 w-16 h-1 bg-gradient-to-l from-green-500 to-green-600 rounded-bl-full"></div>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 relative overflow-hidden">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-bold text-gray-600 uppercase tracking-wider">Bugünkü Randevu</p>
@@ -405,9 +469,11 @@ export default function Home() {
                 <Calendar className="h-10 w-10 text-white" />
               </div>
             </div>
+            {/* Sağ üst köşe dekoratif çizgi */}
+            <div className="absolute top-0 right-0 w-16 h-1 bg-gradient-to-l from-purple-500 to-purple-600 rounded-bl-full"></div>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 relative overflow-hidden">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-bold text-gray-600 uppercase tracking-wider">Aylık Gelir</p>
@@ -421,7 +487,91 @@ export default function Home() {
                 <DollarSign className="h-10 w-10 text-white" />
               </div>
             </div>
+            {/* Sağ üst köşe dekoratif çizgi */}
+            <div className="absolute top-0 right-0 w-16 h-1 bg-gradient-to-l from-orange-500 to-orange-600 rounded-bl-full"></div>
           </div>
+        </div>
+
+        {/* Database Connection Status Card */}
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 mb-8 hover:shadow-2xl transition-all duration-300 relative overflow-hidden">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <div className={`p-3 rounded-xl ${dbConnectionStatus.isConnected ? 'bg-green-100' : 'bg-red-100'}`}>
+                <Database className={`h-6 w-6 ${dbConnectionStatus.isConnected ? 'text-green-600' : 'text-red-600'}`} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Veritabanı Bağlantısı</h3>
+                <p className="text-sm text-gray-600">MariaDB bağlantı durumu</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={checkDatabaseConnection}
+                disabled={checkingDbStatus}
+                className={`px-4 py-2 rounded-xl font-semibold transition-all duration-300 flex items-center space-x-2 ${
+                  checkingDbStatus
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
+              >
+                {checkingDbStatus ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
+                    <span>Kontrol Ediliyor</span>
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4" />
+                    <span>Kontrol Et</span>
+                  </>
+                )}
+              </button>
+              {canSeeAdmin && (
+                <Link href="/admin/database" className="bg-purple-600 text-white px-4 py-2 rounded-xl hover:bg-purple-700 transition-all duration-300 font-semibold">
+                  Veritabanı Yönet →
+                </Link>
+              )}
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="text-center p-4 rounded-xl bg-gray-50">
+              <div className={`inline-flex items-center justify-center w-12 h-12 rounded-full mb-2 ${
+                dbConnectionStatus.isConnected ? 'bg-green-100' : 'bg-red-100'
+              }`}>
+                {dbConnectionStatus.isConnected ? (
+                  <CheckCircle className="h-6 w-6 text-green-600" />
+                ) : (
+                  <XCircle className="h-6 w-6 text-red-600" />
+                )}
+              </div>
+              <p className="text-sm font-semibold text-gray-600">Durum</p>
+              <p className={`text-lg font-bold ${
+                dbConnectionStatus.isConnected ? 'text-green-600' : 'text-red-600'
+              }`}>
+                {dbConnectionStatus.isConnected ? 'Bağlı' : 'Bağlantı Yok'}
+              </p>
+            </div>
+            
+            <div className="text-center p-4 rounded-xl bg-gray-50">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full mb-2 bg-blue-100">
+                <Clock className="h-6 w-6 text-blue-600" />
+              </div>
+              <p className="text-sm font-semibold text-gray-600">Son Kontrol</p>
+              <p className="text-lg font-bold text-gray-900">{dbConnectionStatus.lastCheck}</p>
+            </div>
+            
+            <div className="text-center p-4 rounded-xl bg-gray-50">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full mb-2 bg-purple-100">
+                <Activity className="h-6 w-6 text-purple-600" />
+              </div>
+              <p className="text-sm font-semibold text-gray-600">Mesaj</p>
+              <p className="text-sm font-medium text-gray-900 leading-tight">{dbConnectionStatus.message}</p>
+            </div>
+          </div>
+          
+          {/* Sağ üst köşe dekoratif çizgi */}
+          <div className="absolute top-0 right-0 w-20 h-1 bg-gradient-to-l from-blue-500 to-purple-600 rounded-bl-full"></div>
         </div>
 
         {/* Enhanced Branch Management */}
@@ -431,15 +581,22 @@ export default function Home() {
               <h2 className="text-2xl font-bold text-gray-900">Şube Yönetimi</h2>
               <p className="text-gray-600 mt-1">Tüm şubelerin performans ve durum takibi</p>
             </div>
-            <div className="text-sm text-gray-500">
-              Şube yönetimi için admin paneline erişim gerekli
+            <div className="flex items-center space-x-4">
+              {canSeeAdmin && (
+                <Link href="/admin/branches" className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all duration-300 font-semibold">
+                  Şube Yönet →
+                </Link>
+              )}
+              <Link href="/all-branches" className="bg-green-600 text-white px-6 py-3 rounded-xl hover:bg-green-700 transition-all duration-300 font-semibold">
+                Tüm Şubeler →
+              </Link>
             </div>
           </div>
           
           {branchesLoading ? (
             <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-4 text-gray-600">Şubeler yükleniyor...</p>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Şubeler yükleniyor...</p>
             </div>
           ) : realBranches.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
@@ -450,10 +607,11 @@ export default function Home() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {realBranches.map((branch) => (
-                <div key={branch.id} className="bg-gradient-to-br from-gray-50 to-white border border-gray-200 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
-                  <div className="flex items-start justify-between mb-4">
+                <div key={branch.id} className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 relative overflow-hidden">
+                  {/* Üst kısım - Başlık ve durum */}
+                  <div className="flex items-start justify-between mb-6">
                     <div className="flex-1">
-                      <h3 className="text-lg font-bold text-gray-900 mb-1">{branch.name}</h3>
+                      <h3 className="text-xl font-bold text-gray-900 mb-2">{branch.name}</h3>
                       <p className="text-sm text-gray-500 font-mono">{branch.code}</p>
                     </div>
                     <div className="flex items-center space-x-2">
@@ -464,55 +622,60 @@ export default function Home() {
                     </div>
                   </div>
                   
-                  <div className="space-y-3 mb-6">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600 flex items-center">
-                        <Users className="h-4 w-4 mr-2" />
+                  {/* Şube verileri */}
+                  <div className="space-y-4 mb-6">
+                    <div className="flex items-center justify-between p-3 bg-blue-50 rounded-xl">
+                      <span className="text-gray-700 flex items-center font-medium">
+                        <Users className="h-4 w-4 mr-3 text-blue-500" />
                         Hasta Sayısı
                       </span>
-                      <span className="font-bold text-gray-900">{(branch.patients || 0).toLocaleString()}</span>
+                      <span className="font-bold text-blue-600 text-lg">{(branch.patients || 0).toLocaleString()}</span>
                     </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600 flex items-center">
-                        <Calendar className="h-4 w-4 mr-2" />
+                    <div className="flex items-center justify-between p-3 bg-purple-50 rounded-xl">
+                      <span className="text-gray-700 flex items-center font-medium">
+                        <Calendar className="h-4 w-4 mr-3 text-purple-500" />
                         Bugünkü Randevu
                       </span>
-                      <span className="font-bold text-gray-900">{branch.appointments || 0}</span>
+                      <span className="font-bold text-purple-600 text-lg">{branch.appointments || 0}</span>
                     </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600 flex items-center">
-                        <DollarSign className="h-4 w-4 mr-2" />
+                    <div className="flex items-center justify-between p-3 bg-green-50 rounded-xl">
+                      <span className="text-gray-700 flex items-center font-medium">
+                        <DollarSign className="h-4 w-4 mr-3 text-green-500" />
                         Aylık Gelir
                       </span>
-                      <span className="font-bold text-gray-900">₺{(branch.revenue || 0).toLocaleString()}</span>
+                      <span className="font-bold text-green-600 text-lg">₺{(branch.revenue || 0).toLocaleString()}</span>
                     </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600 flex items-center">
-                        <Users className="h-4 w-4 mr-2" />
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                      <span className="text-gray-700 flex items-center font-medium">
+                        <Users className="h-4 w-4 mr-3 text-gray-500" />
                         Şube Müdürü
                       </span>
-                      <span className="font-medium text-gray-900">{branch.manager || 'Belirtilmemiş'}</span>
+                      <span className="font-medium text-gray-900">{branch.manager_name || branch.manager || 'Belirtilmemiş'}</span>
                     </div>
                   </div>
 
+                  {/* Butonlar */}
                   {canSeeAdmin ? (
                     <div className="flex space-x-3">
                       <Link
                         href={`/admin/branches/${branch.id}`}
-                        className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-xl text-sm text-center hover:shadow-lg transition-all duration-300 font-semibold"
+                        className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3 rounded-xl text-sm text-center hover:shadow-lg transition-all duration-300 font-semibold"
                       >
                         Detaylar
                       </Link>
                       <Link
                         href={`/admin/branches/${branch.id}/edit`}
-                        className="flex-1 bg-gray-100 text-gray-700 px-4 py-2 rounded-xl text-sm text-center hover:bg-gray-200 transition-all duration-300 font-semibold"
+                        className="flex-1 bg-gray-50 hover:bg-gray-100 text-gray-700 px-4 py-3 rounded-xl text-sm text-center hover:shadow-lg transition-all duration-300 font-semibold border border-gray-200"
                       >
                         Düzenle
                       </Link>
                     </div>
                   ) : (
-                    <div className="text-xs text-gray-400 font-medium">Admin yetkisi gerekli</div>
+                    <div className="text-xs text-gray-400 font-medium text-center py-2">Admin yetkisi gerekli</div>
                   )}
+                  
+                  {/* Sağ üst köşe dekoratif çizgi */}
+                  <div className="absolute top-0 right-0 w-20 h-1 bg-gradient-to-l from-blue-500 to-green-600 rounded-bl-full"></div>
                 </div>
               ))}
             </div>
@@ -540,8 +703,8 @@ export default function Home() {
           
           {loading ? (
             <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-4 text-gray-600">Şube kartları yükleniyor...</p>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Şube kartları yükleniyor...</p>
             </div>
           ) : branchCards.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
@@ -552,11 +715,12 @@ export default function Home() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {branchCards.map((branch) => (
-                <div key={branch.id} className="bg-gradient-to-br from-gray-50 to-white border border-gray-200 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
-                  <div className="flex items-start justify-between mb-4">
+                <div key={branch.id} className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 relative overflow-hidden">
+                  {/* Üst kısım - Başlık ve durum */}
+                  <div className="flex items-start justify-between mb-6">
                     <div className="flex-1">
-                      <h3 className="text-lg font-bold text-gray-900 mb-1">{branch.branch_name}</h3>
-                      <p className="text-sm text-gray-500">{branch.location}</p>
+                      <h3 className="text-xl font-bold text-gray-900 mb-2">{branch.branch_name}</h3>
+                      <p className="text-sm text-gray-500 font-medium">{branch.location}</p>
                     </div>
                     <div className="flex items-center space-x-2">
                       <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
@@ -566,43 +730,49 @@ export default function Home() {
                     </div>
                   </div>
                   
-                  <div className="space-y-3 mb-6">
+                  {/* Kart verileri */}
+                  <div className="space-y-4 mb-6">
                     {branch.cards && branch.cards.length > 0 ? (
                       branch.cards.map((card: CardData, index: number) => (
-                        <div key={index} className="flex items-center justify-between text-sm">
-                          <span className="text-gray-600 flex items-center">
-                            {card.card_icon === 'users' && <Users className="h-4 w-4 mr-2" />}
-                            {card.card_icon === 'calendar' && <Calendar className="h-4 w-4 mr-2" />}
-                            {card.card_icon === 'dollar-sign' && <DollarSign className="h-4 w-4 mr-2" />}
-                            {card.card_icon === 'user' && <Users className="h-4 w-4 mr-2" />}
+                        <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                          <span className="text-gray-700 flex items-center font-medium">
+                            {card.card_icon === 'users' && <Users className="h-4 w-4 mr-3 text-blue-500" />}
+                            {card.card_icon === 'calendar' && <Calendar className="h-4 w-4 mr-3 text-purple-500" />}
+                            {card.card_icon === 'dollar-sign' && <DollarSign className="h-4 w-4 mr-3 text-green-500" />}
+                            {card.card_icon === 'user' && <Users className="h-4 w-4 mr-3 text-blue-500" />}
                             {card.card_title}
                           </span>
-                          <span className="font-bold text-gray-900">{card.formatted_value}</span>
+                          <span className="font-bold text-gray-900 text-lg">{card.formatted_value}</span>
                         </div>
                       ))
                     ) : (
-                      <div className="text-center py-4 text-gray-400">
+                      <div className="text-center py-6 text-gray-400">
+                        <Building2 className="h-8 w-8 mx-auto mb-2" />
                         <p className="text-sm">Kart verisi bulunamadı</p>
                       </div>
                     )}
                   </div>
 
+                  {/* Butonlar */}
                   {canSeeAdmin && (
                     <div className="flex space-x-3">
                       <Link
                         href={`/admin/branches/${branch.id}`}
-                        className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-xl text-sm text-center hover:shadow-lg transition-all duration-300 font-semibold"
+                        className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3 rounded-xl text-sm text-center hover:shadow-lg transition-all duration-300 font-semibold"
                       >
                         Detaylar
                       </Link>
                       <Link
                         href={`/admin/branch-cards`}
-                        className="flex-1 bg-gray-100 text-gray-700 px-4 py-2 rounded-xl text-sm text-center hover:bg-gray-200 transition-all duration-300 font-semibold"
+                        className="flex-1 bg-gray-50 hover:bg-gray-100 text-gray-700 px-4 py-3 rounded-xl text-sm text-center hover:shadow-lg transition-all duration-300 font-semibold border border-gray-200"
                       >
                         Kartları Düzenle
                       </Link>
                     </div>
                   )}
+                  
+                  {/* Sağ üst köşe dekoratif çizgi */}
+                  <div className="absolute top-0 right-0 w-20 h-1 bg-gradient-to-l from-green-500 to-blue-600 rounded-bl-full"></div>
                 </div>
               ))}
             </div>
@@ -623,8 +793,8 @@ export default function Home() {
           
           {queriesLoading ? (
             <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-4 text-gray-600">Raporlar yükleniyor...</p>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Raporlar yükleniyor...</p>
             </div>
           ) : savedQueries.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
@@ -635,51 +805,55 @@ export default function Home() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {/* İlk 9 sorguyu göster */}
-              {savedQueries.slice(0, 9).map((query) => {
-                const colors = getCategoryColors(query.category);
-                const [bgGradient, borderColor, iconBg, categoryText, categoryBg] = colors.split(' ');
-                
-                return (
-                  <div key={query.id} className="group">
-                    <div className={`bg-gradient-to-br ${bgGradient} border ${borderColor} rounded-2xl p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group-hover:border-opacity-80 relative overflow-hidden`}>
-                      {/* Üst kısım - İkon ve kategori */}
-                      <div className="flex items-center justify-between mb-4">
-                        <div className={`p-3 ${iconBg} rounded-xl shadow-lg`}>
-                          {getCategoryIcon(query.category)}
-                        </div>
-                        <span className={`text-xs font-semibold ${categoryText} ${categoryBg} px-3 py-1 rounded-full`}>
-                          {query.category || 'Genel'}
-                        </span>
+              {savedQueries.slice(0, 9).map((query) => (
+                <div key={query.id} className="group">
+                  <div className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 relative overflow-hidden">
+                    {/* Üst kısım - İkon ve kategori */}
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="p-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl shadow-lg">
+                        {getCategoryIcon(query.category)}
                       </div>
-                      
-                      {/* Başlık ve açıklama */}
-                      <h3 className="text-lg font-bold text-gray-900 mb-2">{query.name}</h3>
-                      <p className="text-sm text-gray-600 mb-4 line-clamp-2">{query.description || 'Açıklama yok'}</p>
-                      
-                      {/* Alt kısım - Butonlar */}
-                      <div className="flex space-x-2 mt-4">
-                        <button 
-                          onClick={() => window.open(`/reports/${query.id}`, '_blank')}
-                          className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2"
-                        >
-                          <Activity className="h-4 w-4" />
-                          <span>Çalıştır</span>
-                        </button>
-                        <Link 
-                          href={`/reports/${query.id}`}
-                          className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center justify-center space-x-2"
-                        >
-                          <FileText className="h-4 w-4" />
-                          <span>Detaylar</span>
-                        </Link>
-                      </div>
-                      
-                      {/* Hover efekti için arka plan */}
-                      <div className="absolute inset-0 bg-gradient-to-br from-white/0 to-white/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+                      <span className={`text-xs font-semibold px-3 py-1 rounded-full ${
+                        query.category === 'patient' || query.category === 'hasta' ? 'bg-blue-100 text-blue-700' :
+                        query.category === 'branch' || query.category === 'şube' ? 'bg-orange-100 text-orange-700' :
+                        query.category === 'financial' || query.category === 'finansal' ? 'bg-green-100 text-green-700' :
+                        query.category === 'appointment' || query.category === 'randevu' ? 'bg-purple-100 text-purple-700' :
+                        'bg-gray-100 text-gray-700'
+                      }`}>
+                        {query.category || 'Genel'}
+                      </span>
                     </div>
+                    
+                    {/* Başlık ve açıklama */}
+                    <h3 className="text-lg font-bold text-gray-900 mb-3 line-clamp-1">{query.name}</h3>
+                    <p className="text-sm text-gray-600 mb-6 line-clamp-2 min-h-[2.5rem]">{query.description || 'Açıklama yok'}</p>
+                    
+                    {/* Alt kısım - Butonlar */}
+                    <div className="flex space-x-3">
+                      <button 
+                        onClick={() => window.open(`/reports/${query.id}`, '_blank')}
+                        className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2"
+                      >
+                        <Activity className="h-4 w-4" />
+                        <span>Çalıştır</span>
+                      </button>
+                      <Link 
+                        href={`/reports/${query.id}`}
+                        className="flex-1 bg-gray-50 hover:bg-gray-100 text-gray-700 px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center justify-center space-x-2 border border-gray-200"
+                      >
+                        <FileText className="h-4 w-4" />
+                        <span>Detaylar</span>
+                      </Link>
+                    </div>
+                    
+                    {/* Hover efekti için arka plan */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-blue-50/0 to-purple-50/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+                    
+                    {/* Sağ üst köşe dekoratif çizgi */}
+                    <div className="absolute top-0 right-0 w-20 h-1 bg-gradient-to-l from-blue-500 to-purple-600 rounded-bl-full"></div>
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -764,6 +938,82 @@ export default function Home() {
                 </tr>
               </tbody>
             </table>
+          </div>
+        </div>
+
+        {/* Hızlı Erişim Kartları */}
+        <div className="mt-8 bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Hızlı Erişim</h2>
+              <p className="text-gray-600 mt-1">Sık kullanılan sayfalara hızlı erişim</p>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Link href="/appointments" className="group">
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 relative overflow-hidden">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="p-3 bg-blue-500 rounded-xl shadow-lg">
+                    <Calendar className="h-8 w-8 text-white" />
+                  </div>
+                  <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-3 py-1 rounded-full">
+                    Randevu
+                  </span>
+                </div>
+                <h3 className="text-lg font-bold text-gray-900 mb-2">Randevu Yönetimi</h3>
+                <p className="text-sm text-gray-600">Randevu oluştur, düzenle ve takip et</p>
+                <div className="absolute top-0 right-0 w-16 h-1 bg-gradient-to-l from-blue-500 to-blue-600 rounded-bl-full"></div>
+              </div>
+            </Link>
+
+            <Link href="/patients" className="group">
+              <div className="bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 relative overflow-hidden">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="p-3 bg-green-500 rounded-xl shadow-lg">
+                    <Users className="h-8 w-8 text-white" />
+                  </div>
+                  <span className="text-xs font-semibold bg-green-100 text-green-700 px-3 py-1 rounded-full">
+                    Hasta
+                  </span>
+                </div>
+                <h3 className="text-lg font-bold text-gray-900 mb-2">Hasta Yönetimi</h3>
+                <p className="text-sm text-gray-600">Hasta kayıtları ve bilgileri</p>
+                <div className="absolute top-0 right-0 w-16 h-1 bg-gradient-to-l from-green-500 to-green-600 rounded-bl-full"></div>
+              </div>
+            </Link>
+
+            <Link href="/treatments" className="group">
+              <div className="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 relative overflow-hidden">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="p-3 bg-purple-500 rounded-xl shadow-lg">
+                    <Activity className="h-8 w-8 text-white" />
+                  </div>
+                  <span className="text-xs font-semibold bg-purple-100 text-purple-700 px-3 py-1 rounded-full">
+                    Tedavi
+                  </span>
+                </div>
+                <h3 className="text-lg font-bold text-gray-900 mb-2">Tedavi Yönetimi</h3>
+                <p className="text-sm text-gray-600">Tedavi planları ve takibi</p>
+                <div className="absolute top-0 right-0 w-16 h-1 bg-gradient-to-l from-purple-500 to-purple-600 rounded-bl-full"></div>
+              </div>
+            </Link>
+
+            <Link href="/invoices" className="group">
+              <div className="bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 relative overflow-hidden">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="p-3 bg-orange-500 rounded-xl shadow-lg">
+                    <DollarSign className="h-8 w-8 text-white" />
+                  </div>
+                  <span className="text-xs font-semibold bg-orange-100 text-orange-700 px-3 py-1 rounded-full">
+                    Fatura
+                  </span>
+                </div>
+                <h3 className="text-lg font-bold text-gray-900 mb-2">Fatura Yönetimi</h3>
+                <p className="text-sm text-gray-600">Fatura oluştur ve takip et</p>
+                <div className="absolute top-0 right-0 w-16 h-1 bg-gradient-to-l from-orange-500 to-orange-600 rounded-bl-full"></div>
+              </div>
+            </Link>
           </div>
         </div>
       </main>

@@ -32,6 +32,9 @@ app.use('/api/admin', require('./src/routes/admin'));
 // Test database connection
 app.use('/api/test-db', require('./src/routes/test-db'));
 
+// Branch cards
+app.use('/api/branch-cards', require('./src/routes/branch-cards'));
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({

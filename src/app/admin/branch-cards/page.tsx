@@ -13,7 +13,9 @@ import {
   Activity,
   Code,
   Save,
-  Shield
+  Shield,
+  Play,
+  Database
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -24,9 +26,12 @@ interface BranchCard {
   card_title: string;
   card_subtitle?: string;
   card_icon: string;
-  color: string;
+  sql_query?: string;
+  data_type?: string;
+  format_string?: string;
   order_index: number;
   is_active: boolean;
+  branch_name?: string;
 }
 
 interface Branch {
@@ -42,6 +47,8 @@ export default function BranchCardsManagement() {
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingCard, setEditingCard] = useState<BranchCard | null>(null);
+  const [testingQuery, setTestingQuery] = useState(false);
+  const [queryResult, setQueryResult] = useState<any>(null);
 
   useEffect(() => {
     try {
@@ -64,11 +71,11 @@ export default function BranchCardsManagement() {
     try {
       setLoading(true);
       
-      const response = await fetch('/api/test-db/branch-cards');
+      const response = await fetch('http://localhost:5000/api/branch-cards');
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          setBranchCards(data.cards);
+          setBranchCards(data.data);
         }
       }
     } catch (error) {
@@ -81,11 +88,11 @@ export default function BranchCardsManagement() {
   // Şubeleri yükle
   const loadBranches = async () => {
     try {
-      const response = await fetch('/api/branches');
+      const response = await fetch('http://localhost:5000/api/branches');
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          setBranches(data.branches);
+          setBranches(data.data);
         }
       }
     } catch (error) {
@@ -93,10 +100,39 @@ export default function BranchCardsManagement() {
     }
   };
 
+  // SQL sorgusu test et
+  const testQuery = async (sqlQuery: string, branchId: number) => {
+    if (!sqlQuery || !sqlQuery.trim()) {
+      alert('Lütfen SQL sorgusu girin');
+      return;
+    }
+
+    setTestingQuery(true);
+    try {
+      const response = await fetch('http://localhost:5000/api/branch-cards/test-query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sql_query: sqlQuery, branch_id: branchId })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setQueryResult(data.data);
+      } else {
+        alert('Hata: ' + data.message);
+      }
+    } catch (error) {
+      console.error('Sorgu test hatası:', error);
+      alert('Sorgu test edilirken hata oluştu');
+    } finally {
+      setTestingQuery(false);
+    }
+  };
+
   // Şube kartı ekle/güncelle
   const saveBranchCard = async (cardData: BranchCard) => {
     try {
-      const url = editingCard ? `/api/test-db/branch-cards/${editingCard.id}` : '/api/test-db/branch-cards';
+      const url = editingCard ? `http://localhost:5000/api/branch-cards/${editingCard.id}` : 'http://localhost:5000/api/branch-cards';
       const method = editingCard ? 'PUT' : 'POST';
       
       const response = await fetch(url, {
@@ -106,12 +142,22 @@ export default function BranchCardsManagement() {
       });
       
       if (response.ok) {
-        await loadBranchCards();
-        setShowAddForm(false);
-        setEditingCard(null);
+        const data = await response.json();
+        if (data.success) {
+          alert(editingCard ? 'Şube kartı güncellendi!' : 'Şube kartı eklendi!');
+          await loadBranchCards();
+          setShowAddForm(false);
+          setEditingCard(null);
+          setQueryResult(null);
+        } else {
+          alert('Hata: ' + data.message);
+        }
+      } else {
+        alert('Kaydetme sırasında hata oluştu');
       }
     } catch (error) {
       console.error('Şube kartı kaydedilirken hata:', error);
+      alert('Kaydetme sırasında hata oluştu');
     }
   };
 
@@ -119,15 +165,24 @@ export default function BranchCardsManagement() {
   const deleteBranchCard = async (id: number) => {
     if (confirm('Bu şube kartını silmek istediğinizden emin misiniz?')) {
       try {
-        const response = await fetch(`/api/test-db/branch-cards/${id}`, {
+        const response = await fetch(`http://localhost:5000/api/branch-cards/${id}`, {
           method: 'DELETE'
         });
         
         if (response.ok) {
-          await loadBranchCards();
+          const data = await response.json();
+          if (data.success) {
+            alert('Şube kartı silindi!');
+            await loadBranchCards();
+          } else {
+            alert('Hata: ' + data.message);
+          }
+        } else {
+          alert('Silme sırasında hata oluştu');
         }
       } catch (error) {
         console.error('Şube kartı silinirken hata:', error);
+        alert('Silme sırasında hata oluştu');
       }
     }
   };
@@ -199,6 +254,7 @@ export default function BranchCardsManagement() {
                 onClick={() => {
                   setShowAddForm(false);
                   setEditingCard(null);
+                  setQueryResult(null);
                 }}
                 className="text-gray-500 hover:text-gray-700"
               >
@@ -214,9 +270,11 @@ export default function BranchCardsManagement() {
                 card_title: formData.get('card_title') as string,
                 card_subtitle: formData.get('card_subtitle') as string,
                 card_icon: formData.get('card_icon') as string,
-                color: formData.get('color') as string,
+                sql_query: formData.get('sql_query') as string,
+                data_type: formData.get('data_type') as string,
+                format_string: formData.get('format_string') as string,
                 order_index: parseInt(formData.get('order_index') as string),
-                is_active: true // Default to true for new cards
+                is_active: true
               };
               saveBranchCard(cardData);
             }}>
@@ -246,7 +304,7 @@ export default function BranchCardsManagement() {
                     required
                     defaultValue={editingCard?.card_title || ''}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Örn: Hasta İstatistikleri"
+                    placeholder="Örn: Hasta Sayısı"
                   />
                 </div>
                 
@@ -257,7 +315,7 @@ export default function BranchCardsManagement() {
                     name="card_subtitle"
                     defaultValue={editingCard?.card_subtitle || ''}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Örn: Güncel hasta verileri"
+                    placeholder="Örn: Toplam aktif hasta"
                   />
                 </div>
                 
@@ -273,22 +331,24 @@ export default function BranchCardsManagement() {
                     <option value="calendar">📅 Randevu</option>
                     <option value="dollar-sign">💰 Gelir</option>
                     <option value="activity">📊 Aktivite</option>
+                    <option value="trending-up">📈 Trend</option>
+                    <option value="target">🎯 Hedef</option>
                   </select>
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Renk</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Veri Tipi</label>
                   <select
-                    name="color"
+                    name="data_type"
                     required
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    defaultValue={editingCard?.color || 'blue'}
+                    defaultValue={editingCard?.data_type || 'number'}
                   >
-                    <option value="blue">🔵 Mavi</option>
-                    <option value="green">🟢 Yeşil</option>
-                    <option value="purple">🟣 Mor</option>
-                    <option value="orange">🟠 Turuncu</option>
-                    <option value="red">🔴 Kırmızı</option>
+                    <option value="number">🔢 Sayı</option>
+                    <option value="currency">💰 Para</option>
+                    <option value="text">📝 Metin</option>
+                    <option value="percentage">📊 Yüzde</option>
+                    <option value="date">📅 Tarih</option>
                   </select>
                 </div>
                 
@@ -304,6 +364,82 @@ export default function BranchCardsManagement() {
                   />
                 </div>
               </div>
+
+              {/* SQL Sorgusu */}
+              <div className="mt-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  SQL Sorgusu <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <textarea
+                    name="sql_query"
+                    required
+                    rows={4}
+                    defaultValue={editingCard?.sql_query || ''}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                    placeholder="SELECT COUNT(*) FROM patients WHERE branch_id = $1 AND is_active = true"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const form = document.querySelector('form');
+                      const branchId = (form?.querySelector('[name="branch_id"]') as HTMLSelectElement)?.value;
+                      const sqlQuery = (form?.querySelector('[name="sql_query"]') as HTMLTextAreaElement)?.value;
+                      if (branchId && sqlQuery) {
+                        testQuery(sqlQuery, parseInt(branchId));
+                      } else {
+                        alert('Lütfen önce şube seçin ve SQL sorgusu girin');
+                      }
+                    }}
+                    disabled={testingQuery}
+                    className="absolute top-2 right-2 bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 disabled:bg-blue-400 transition-colors"
+                    title="SQL sorgusunu test et"
+                  >
+                    {testingQuery ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    ) : (
+                      <Play className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  $1 parametresi şube ID'si için kullanılır. Örnek: SELECT COUNT(*) FROM patients WHERE branch_id = $1
+                </p>
+              </div>
+
+              {/* Format String */}
+              <div className="mt-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Format String</label>
+                <input
+                  type="text"
+                  name="format_string"
+                  defaultValue={editingCard?.format_string || '{value}'}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="₺{value} veya {value} hasta"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  {'{value}'} yerine gerçek değer gelecek. Örnek: ₺{'{value}'}, {'{value}'} hasta, %{'{value}'}
+                </p>
+              </div>
+
+              {/* Test Sonucu */}
+              {queryResult && (
+                <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-xl">
+                  <h4 className="font-semibold text-green-800 mb-2">✅ SQL Sorgusu Test Sonucu</h4>
+                  <div className="text-sm text-green-700 space-y-1">
+                    <p><strong>Satır Sayısı:</strong> {queryResult.rowCount}</p>
+                    <p><strong>Kolonlar:</strong> {queryResult.columns.join(', ')}</p>
+                    {queryResult.sampleData.length > 0 && (
+                      <div>
+                        <p><strong>Örnek Veri:</strong></p>
+                        <pre className="bg-white p-2 rounded text-xs overflow-x-auto">
+                          {JSON.stringify(queryResult.sampleData, null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
               
               <div className="mt-6 flex justify-end space-x-4">
                 <button
@@ -311,6 +447,7 @@ export default function BranchCardsManagement() {
                   onClick={() => {
                     setShowAddForm(false);
                     setEditingCard(null);
+                    setQueryResult(null);
                   }}
                   className="px-6 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all duration-300 font-semibold"
                 >
@@ -365,12 +502,12 @@ export default function BranchCardsManagement() {
                     <div className="flex-1">
                       <h3 className="text-lg font-bold text-gray-900 mb-1">{card.card_title}</h3>
                       <p className="text-sm text-gray-500">{card.card_subtitle}</p>
-                      <p className="text-xs text-gray-400">Şube ID: {card.branch_id}</p>
+                      <p className="text-xs text-gray-400">Şube: {card.branch_name || `ID: ${card.branch_id}`}</p>
                     </div>
                     <div className="flex items-center space-x-2">
                       <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
-                        <Building2 className="h-3 w-3 mr-1" />
-                        Kart
+                        <Database className="h-3 w-3 mr-1" />
+                        {card.data_type || 'Veri'}
                       </span>
                     </div>
                   </div>
@@ -381,8 +518,8 @@ export default function BranchCardsManagement() {
                       <span className="font-medium text-gray-900">{card.card_icon}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Renk:</span>
-                      <span className="font-medium text-gray-900">{card.color}</span>
+                      <span className="text-gray-600">Veri Tipi:</span>
+                      <span className="font-medium text-gray-900">{card.data_type || 'Belirtilmemiş'}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-600">Sıra:</span>
@@ -394,6 +531,12 @@ export default function BranchCardsManagement() {
                         {card.is_active ? 'Aktif' : 'Pasif'}
                       </span>
                     </div>
+                    {card.sql_query && (
+                      <div className="mt-3 p-2 bg-gray-100 rounded text-xs font-mono overflow-x-auto">
+                        <div className="text-gray-600 mb-1">SQL:</div>
+                        <div className="text-gray-800">{card.sql_query}</div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex space-x-3">
@@ -401,6 +544,7 @@ export default function BranchCardsManagement() {
                       onClick={() => {
                         setEditingCard(card);
                         setShowAddForm(true);
+                        setQueryResult(null);
                       }}
                       className="flex-1 bg-blue-100 text-blue-700 px-4 py-2 rounded-xl text-sm text-center hover:bg-blue-200 transition-all duration-300 font-semibold flex items-center justify-center space-x-2"
                     >

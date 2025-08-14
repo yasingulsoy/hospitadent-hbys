@@ -1,8 +1,9 @@
 {
   "/_not-found/page": "app/_not-found/page.js",
-  "/favicon.ico/route": "app/favicon.ico/route.js",
   "/page": "app/page.js",
-  "/admin/database/page": "app/admin/database/page.js",
+  "/admin/branches/page": "app/admin/branches/page.js",
+  "/reports/page": "app/reports/page.js",
   "/reports/[id]/page": "app/reports/[id]/page.js",
-  "/admin/page": "app/admin/page.js"
+  "/admin/page": "app/admin/page.js",
+  "/admin/branch-cards/page": "app/admin/branch-cards/page.js"
 }

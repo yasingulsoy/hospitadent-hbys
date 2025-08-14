@@ -81,8 +81,10 @@ export default function DatabasePage() {
 
   // Kayıtlı bağlantıları listele
   const [savedConnections, setSavedConnections] = useState<any[]>([]);
+  const [loadingConnections, setLoadingConnections] = useState(false);
   
   const loadSavedConnections = async () => {
+    setLoadingConnections(true);
     try {
       const response = await fetch('http://localhost:5000/api/admin/database-connections');
       const data = await response.json();
@@ -92,13 +94,17 @@ export default function DatabasePage() {
       }
     } catch (error) {
       console.error('Kayıtlı bağlantılar yüklenirken hata:', error);
+    } finally {
+      setLoadingConnections(false);
     }
   };
 
   // Kayıtlı sorguları listele
   const [savedQueries, setSavedQueries] = useState<any[]>([]);
+  const [loadingQueries, setLoadingQueries] = useState(false);
   
   const loadSavedQueries = async () => {
+    setLoadingQueries(true);
     try {
       // Artık doğrudan doğrudan PostgreSQL'den veri çek, parametre gönderme
       const response = await fetch('http://localhost:5000/api/admin/database/save-query');
@@ -110,6 +116,8 @@ export default function DatabasePage() {
       }
     } catch (error) {
       console.error('Kayıtlı sorgular yüklenirken hata:', error);
+    } finally {
+      setLoadingQueries(false);
     }
   };
 
@@ -377,20 +385,22 @@ export default function DatabasePage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="bg-white rounded-2xl shadow-xl p-8 mb-8 border border-gray-100">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-3 rounded-xl">
-                <Database className="h-8 w-8 text-white" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">Veritabanı Yönetimi</h1>
-                <p className="text-gray-600 mt-1">Veritabanı bağlantıları ve ayarları</p>
-              </div>
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center space-x-4">
+            <Link 
+              href="/admin"
+              className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
+            >
+              ← Geri
+            </Link>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Veritabanı Yönetimi</h1>
+              <p className="text-gray-600 mt-2">Veritabanı bağlantıları ve sorguları yönetin</p>
             </div>
-            
-            {/* Bağlantı Durumu */}
-            <div className="flex items-center space-x-4">
+          </div>
+          
+          {/* Bağlantı Durumu */}
+          <div className="flex items-center space-x-4">
               <div className={`flex items-center space-x-2 px-4 py-2 rounded-xl ${
                 status.isConnected 
                   ? 'bg-green-100 text-green-800' 
@@ -746,7 +756,12 @@ export default function DatabasePage() {
                     </button>
                   </div>
                   
-                  {savedConnections.length > 0 ? (
+                  {loadingConnections ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                      <p className="text-gray-600">Bağlantılar yükleniyor...</p>
+                    </div>
+                  ) : savedConnections.length > 0 ? (
                     <div className="space-y-4">
                       {savedConnections.map((connection, index) => (
                         <div key={index} className="bg-gray-50 rounded-xl p-6 border border-gray-200">
@@ -929,7 +944,12 @@ export default function DatabasePage() {
                    
                    <div className="bg-gray-50 rounded-xl p-4">
                      <h4 className="font-semibold text-gray-900 mb-2">Sonuçlar</h4>
-                     {queryResults ? (
+                     {isExecuting ? (
+                       <div className="text-center py-8">
+                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                         <p className="text-gray-600">Sorgu çalıştırılıyor...</p>
+                       </div>
+                     ) : queryResults ? (
                        <div className="space-y-4">
                          <div className="text-sm text-green-600 font-medium">
                            {queryResults.message}
@@ -946,10 +966,10 @@ export default function DatabasePage() {
                                    ))}
                                  </tr>
                                </thead>
-                                                               <tbody className="bg-white divide-y divide-gray-200">
-                                  {queryResults.results.map((row: any, index: number) => (
-                                    <tr key={index} className="hover:bg-gray-50">
-                                      {Object.values(row).map((value: any, cellIndex: number) => (
+                               <tbody className="bg-white divide-y divide-gray-200">
+                                 {queryResults.results.map((row: any, index: number) => (
+                                   <tr key={index} className="hover:bg-gray-50">
+                                     {Object.values(row).map((value: any, cellIndex: number) => (
                                        <td key={cellIndex} className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
                                          {String(value)}
                                        </td>
@@ -1075,7 +1095,12 @@ export default function DatabasePage() {
                    </button>
                  </div>
                  
-                 {savedQueries.length === 0 ? (
+                 {loadingQueries ? (
+                   <div className="text-center py-12">
+                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                     <p className="text-gray-600">Sorgular yükleniyor...</p>
+                   </div>
+                 ) : savedQueries.length === 0 ? (
                    <div className="text-center py-12 text-gray-500">
                      <FileText className="h-16 w-16 mx-auto text-gray-300 mb-4" />
                      <p className="text-lg">Henüz kayıtlı sorgu yok</p>
@@ -1103,7 +1128,7 @@ export default function DatabasePage() {
                          
                          <div className="space-y-3">
                            <div className="bg-gray-50 rounded-lg p-3">
-                             <code className="text-xs text-gray-800 font-mono line-clamp-3">
+                             <code className="text-xs text-gray-800 font-mono overflow-hidden text-ellipsis whitespace-nowrap">
                                {query.query}
                              </code>
                            </div>
@@ -1141,6 +1166,5 @@ export default function DatabasePage() {
            </div>
          </div>
        </div>
-     </div>
    );
- }
+}

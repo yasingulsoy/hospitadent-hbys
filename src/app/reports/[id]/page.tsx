@@ -21,7 +21,7 @@ interface SavedQuery {
   id: number;
   name: string;
   description: string;
-  sql_query: string; // query yerine sql_query kullan
+  sql_query: string;
   category: string;
   is_public: boolean;
   created_by: string;
@@ -42,6 +42,7 @@ export default function ReportDetailPage() {
   const [loading, setLoading] = useState(true);
   const [executing, setExecuting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadingConnection, setLoadingConnection] = useState(false);
 
   useEffect(() => {
     if (params.id) {
@@ -51,7 +52,6 @@ export default function ReportDetailPage() {
 
   const loadSavedQuery = async (id: string) => {
     try {
-      // Artık doğrudan PostgreSQL'den veri çek, parametre gönderme
       const response = await fetch('http://localhost:5000/api/admin/database/save-query');
       const data = await response.json();
       
@@ -59,7 +59,6 @@ export default function ReportDetailPage() {
         const query = data.queries.find((q: SavedQuery) => q.id === parseInt(id));
         if (query) {
           setSavedQuery(query);
-          // Otomatik olarak sorguyu çalıştır
           executeQuery(query);
         } else {
           setError('Rapor bulunamadı');
@@ -77,20 +76,20 @@ export default function ReportDetailPage() {
     setError(null);
     
     try {
-      // Veritabanından aktif MariaDB bağlantısını al
+      setLoadingConnection(true);
       const connectionResponse = await fetch('http://localhost:5000/api/admin/database-connections');
       const connectionData = await connectionResponse.json();
       
       if (!connectionData.success || connectionData.connections.length === 0) {
         setError('Aktif veritabanı bağlantısı bulunamadı. Lütfen admin sayfasından bağlantı ekleyin.');
         setExecuting(false);
+        setLoadingConnection(false);
         return;
       }
       
-      // İlk aktif bağlantıyı kullan
       const connection = connectionData.connections[0];
+      setLoadingConnection(false);
       
-      // MariaDB bağlantı bilgileri ile sorguyu çalıştır
       const response = await fetch('http://localhost:5000/api/admin/database/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -100,7 +99,7 @@ export default function ReportDetailPage() {
           port: parseInt(connection.port),
           database: connection.database_name,
           username: connection.username,
-          password: connection.password, // Normal password alanını kullan
+          password: connection.password,
           type: connection.type
         })
       });
@@ -116,6 +115,7 @@ export default function ReportDetailPage() {
       setError('Sorgu çalıştırılırken hata oluştu: ' + (error?.message || 'Bilinmeyen hata'));
     } finally {
       setExecuting(false);
+      setLoadingConnection(false);
     }
   };
 
@@ -190,71 +190,63 @@ export default function ReportDetailPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="bg-white rounded-2xl shadow-xl p-8 mb-8 border border-gray-100">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Link
-                href="/reports"
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <ArrowLeft className="h-6 w-6" />
-              </Link>
-              
-              <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-3 rounded-xl">
-                <BarChart3 className="h-8 w-8 text-white" />
-              </div>
-              
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">{savedQuery.name}</h1>
-                <p className="text-gray-600 mt-1">{savedQuery.description || 'Açıklama yok'}</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={handleRefresh}
-                disabled={executing}
-                className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 py-2 rounded-xl font-semibold flex items-center space-x-2 transition-colors"
-              >
-                {executing ? (
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Play className="h-4 w-4" />
-                )}
-                <span>{executing ? 'Çalıştırılıyor...' : 'Yenile'}</span>
-              </button>
-              
-              <button
-                onClick={handleExport}
-                disabled={!queryResult?.results}
-                className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white px-4 py-2 rounded-xl font-semibold flex items-center space-x-2 transition-colors"
-              >
-                <Download className="h-4 w-4" />
-                <span>CSV İndir</span>
-              </button>
-              
-              <Link
-                href={`/admin/database?tab=query&edit=${savedQuery.id}`}
-                className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-xl font-semibold flex items-center space-x-2 transition-colors"
-              >
-                <Edit className="h-4 w-4" />
-                <span>Düzenle</span>
-              </Link>
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center space-x-4">
+            <Link 
+              href="/reports"
+              className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
+            >
+              ← Geri
+            </Link>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Rapor Detayı</h1>
+              <p className="text-gray-600 mt-2">Kayıtlı sorguyu çalıştırın ve sonuçları görüntüleyin</p>
             </div>
           </div>
-          
-          {/* Meta Bilgiler */}
-          <div className="mt-6 flex items-center space-x-6 text-sm text-gray-500">
-            <div className="flex items-center space-x-2">
-              <Clock className="h-4 w-4" />
-              <span>Oluşturulma: {new Date(savedQuery.created_at).toLocaleDateString('tr-TR')}</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <span>Kategori: {savedQuery.category}</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <span>Oluşturan: {savedQuery.created_by}</span>
-            </div>
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={handleRefresh}
+              disabled={executing}
+              className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 py-2 rounded-xl font-semibold flex items-center space-x-2 transition-colors"
+            >
+              {executing ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <Play className="h-4 w-4" />
+              )}
+              <span>{executing ? 'Çalıştırılıyor...' : 'Yenile'}</span>
+            </button>
+            
+            <button
+              onClick={handleExport}
+              disabled={!queryResult?.results}
+              className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white px-4 py-2 rounded-xl font-semibold flex items-center space-x-2 transition-colors"
+            >
+              <Download className="h-4 w-4" />
+              <span>CSV İndir</span>
+            </button>
+            
+            <Link
+              href={`/admin/database?tab=query&edit=${savedQuery.id}`}
+              className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-xl font-semibold flex items-center space-x-2 transition-colors"
+            >
+              <Edit className="h-4 w-4" />
+              <span>Düzenle</span>
+            </Link>
+          </div>
+        </div>
+        
+        {/* Meta Bilgiler */}
+        <div className="mt-6 flex items-center space-x-6 text-sm text-gray-500">
+          <div className="flex items-center space-x-2">
+            <Clock className="h-4 w-4" />
+            <span>Oluşturulma: {new Date(savedQuery.created_at).toLocaleDateString('tr-TR')}</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <span>Kategori: {savedQuery.category}</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <span>Oluşturan: {savedQuery.created_by}</span>
           </div>
         </div>
 
@@ -291,13 +283,25 @@ export default function ReportDetailPage() {
           </div>
           
           <div className="p-6">
-            {error ? (
-              <div className="text-center py-8">
-                <XCircle className="h-16 w-16 text-red-400 mx-auto mb-4" />
-                <h4 className="text-lg font-semibold text-gray-900 mb-2">Hata</h4>
-                <p className="text-red-600">{error}</p>
+            {loadingConnection ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Veritabanı bağlantısı kuruluyor...</p>
               </div>
-            ) : queryResult ? (
+            ) : error ? (
+              <div className="text-center py-12">
+                <XCircle className="h-16 w-16 text-red-400 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-gray-600 mb-2">Hata</h3>
+                <p className="text-gray-500 mb-6">{error}</p>
+                <button
+                  onClick={handleRefresh}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-semibold inline-flex items-center space-x-2 transition-colors"
+                >
+                  <RefreshCw className="h-5 w-5" />
+                  <span>Tekrar Dene</span>
+                </button>
+              </div>
+            ) : queryResult?.results ? (
               <div className="space-y-4">
                 <div className="text-sm text-green-600 font-medium">
                   {queryResult.message}
@@ -316,9 +320,9 @@ export default function ReportDetailPage() {
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {queryResult.results.map((row, index) => (
+                        {queryResult.results.map((row: any, index: number) => (
                           <tr key={index} className="hover:bg-gray-50">
-                            {Object.values(row).map((value, cellIndex) => (
+                            {Object.values(row).map((value: any, cellIndex: number) => (
                               <td key={cellIndex} className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
                                 {String(value)}
                               </td>

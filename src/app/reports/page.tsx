@@ -105,6 +105,12 @@ export default function ReportsPage() {
         <div className="bg-white rounded-2xl shadow-xl p-8 mb-8 border border-gray-100">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
+              <Link 
+                href="/"
+                className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
+              >
+                ← Anasayfa
+              </Link>
               <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-3 rounded-xl">
                 <BarChart3 className="h-8 w-8 text-white" />
               </div>

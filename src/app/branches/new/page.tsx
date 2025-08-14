@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
@@ -15,30 +15,51 @@ import {
   User
 } from 'lucide-react';
 
+interface User {
+  id: number;
+  username: string;
+  email: string;
+  role: string;
+}
+
 export default function NewBranchPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
     name: '',
     code: '',
+    province: '',
     address: '',
     phone: '',
     email: '',
-    managerId: '',
+    manager_id: '',
     timezone: 'Europe/Istanbul',
-    isActive: true
+    is_active: true
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Mock müdür listesi
-  const managers = [
-    { id: '1', name: 'Dr. Ayşe Kaya', email: 'ayse.kaya@hospitadent.com' },
-    { id: '2', name: 'Dr. Ali Yıldız', email: 'ali.yildiz@hospitadent.com' },
-    { id: '3', name: 'Dr. Mehmet Demir', email: 'mehmet.demir@hospitadent.com' },
-    { id: '4', name: 'Dr. Fatma Özkan', email: 'fatma.ozkan@hospitadent.com' },
-    { id: '5', name: 'Dr. Can Yılmaz', email: 'can.yilmaz@hospitadent.com' }
-  ];
+  // Kullanıcıları yükle
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  const loadUsers = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/users');
+      const data = await response.json();
+      
+      if (data.success) {
+        setUsers(data.data || []);
+      }
+    } catch (error) {
+      console.error('Kullanıcılar yüklenirken hata:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -51,6 +72,10 @@ export default function NewBranchPage() {
       newErrors.code = 'Şube kodu zorunludur';
     } else if (!/^[A-Z]{3}-\d{3}$/.test(formData.code)) {
       newErrors.code = 'Şube kodu formatı: XXX-000 (örn: IST-001)';
+    }
+
+    if (!formData.province.trim()) {
+      newErrors.province = 'İl zorunludur';
     }
 
     if (!formData.address.trim()) {
@@ -67,8 +92,8 @@ export default function NewBranchPage() {
       newErrors.email = 'Geçerli bir e-posta adresi giriniz';
     }
 
-    if (!formData.managerId) {
-      newErrors.managerId = 'Şube müdürü seçimi zorunludur';
+    if (!formData.manager_id) {
+      newErrors.manager_id = 'Şube müdürü seçimi zorunludur';
     }
 
     setErrors(newErrors);
@@ -85,72 +110,88 @@ export default function NewBranchPage() {
     setIsSubmitting(true);
 
     try {
-      // Burada API çağrısı yapılacak
-      console.log('Şube kaydediliyor:', formData);
+      console.log('Gönderilecek veri:', formData); // Debug için
       
-      // Simüle edilmiş API çağrısı
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const response = await fetch('http://localhost:5000/api/branches', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...formData,
+          manager_id: formData.manager_id || null
+        }),
+      });
+
+      const data = await response.json();
+      console.log('Backend yanıtı:', data); // Debug için
       
-      // Başarılı kayıt sonrası şube listesine yönlendir
-      router.push('/branches');
+      if (data.success) {
+        alert('Şube başarıyla oluşturuldu!');
+        router.push('/branches');
+      } else {
+        alert('Hata: ' + data.message);
+      }
     } catch (error) {
       console.error('Şube kaydedilirken hata oluştu:', error);
+      alert('Şube oluşturulurken hata oluştu');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleInputChange = (field: string, value: string | boolean) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    
-    // Hata mesajını temizle
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
-    }
-  };
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-6">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center py-20">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Kullanıcılar yükleniyor...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-6">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="bg-white rounded-2xl shadow-xl p-8 mb-8 border border-gray-100">
+          <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <Link 
                 href="/branches"
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
               >
-                <ArrowLeft className="h-5 w-5" />
+                <ArrowLeft className="h-4 w-4" />
+                Geri Dön
               </Link>
+              <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-3 rounded-xl">
+                <Building2 className="h-8 w-8 text-white" />
+              </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Yeni Şube Ekle</h1>
-                <p className="text-sm text-gray-600">Şube bilgilerini girin ve kaydedin</p>
+                <h1 className="text-3xl font-bold text-gray-900">Yeni Şube</h1>
+                <p className="text-gray-600 mt-1">Yeni şube bilgilerini girin</p>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Form */}
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <form onSubmit={handleSubmit} className="space-y-8">
-          {/* Basic Information */}
-          <div className="bg-white rounded-lg shadow-sm border p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
-              <Building2 className="h-5 w-5 mr-2 text-blue-600" />
-              Temel Bilgiler
-            </h2>
-            
+        {/* Form */}
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Şube Bilgileri */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Şube Adı *
+                  Şube Adı <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.name}
-                  onChange={(e) => handleInputChange('name', e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                     errors.name ? 'border-red-300' : 'border-gray-300'
                   }`}
                   placeholder="İstanbul Kadıköy Şubesi"
@@ -165,13 +206,13 @@ export default function NewBranchPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Şube Kodu *
+                  Şube Kodu <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.code}
-                  onChange={(e) => handleInputChange('code', e.target.value.toUpperCase())}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  onChange={(e) => setFormData({...formData, code: e.target.value})}
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                     errors.code ? 'border-red-300' : 'border-gray-300'
                   }`}
                   placeholder="IST-001"
@@ -182,49 +223,38 @@ export default function NewBranchPage() {
                     {errors.code}
                   </p>
                 )}
-                <p className="mt-1 text-xs text-gray-500">Format: XXX-000 (örn: IST-001, ANK-002)</p>
               </div>
 
-              <div className="md:col-span-2">
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Adres *
+                  İl <span className="text-red-500">*</span>
                 </label>
-                <textarea
-                  value={formData.address}
-                  onChange={(e) => handleInputChange('address', e.target.value)}
-                  rows={3}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.address ? 'border-red-300' : 'border-gray-300'
+                <input
+                  type="text"
+                  value={formData.province}
+                  onChange={(e) => setFormData({...formData, province: e.target.value})}
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.province ? 'border-red-300' : 'border-gray-300'
                   }`}
-                  placeholder="Şube adresi"
+                  placeholder="İstanbul"
                 />
-                {errors.address && (
+                {errors.province && (
                   <p className="mt-1 text-sm text-red-600 flex items-center">
                     <AlertCircle className="h-4 w-4 mr-1" />
-                    {errors.address}
+                    {errors.province}
                   </p>
                 )}
               </div>
-            </div>
-          </div>
 
-          {/* Contact Information */}
-          <div className="bg-white rounded-lg shadow-sm border p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
-              <Phone className="h-5 w-5 mr-2 text-green-600" />
-              İletişim Bilgileri
-            </h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Telefon *
+                  Telefon <span className="text-red-500">*</span>
                 </label>
                 <input
-                  type="tel"
+                  type="text"
                   value={formData.phone}
-                  onChange={(e) => handleInputChange('phone', e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                     errors.phone ? 'border-red-300' : 'border-gray-300'
                   }`}
                   placeholder="0216 123 45 67"
@@ -244,11 +274,11 @@ export default function NewBranchPage() {
                 <input
                   type="email"
                   value={formData.email}
-                  onChange={(e) => handleInputChange('email', e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                     errors.email ? 'border-red-300' : 'border-gray-300'
                   }`}
-                  placeholder="sube@hospitadent.com"
+                  placeholder="kadikoy@hospitadent.com"
                 />
                 {errors.email && (
                   <p className="mt-1 text-sm text-red-600 flex items-center">
@@ -257,112 +287,98 @@ export default function NewBranchPage() {
                   </p>
                 )}
               </div>
-            </div>
-          </div>
 
-          {/* Management */}
-          <div className="bg-white rounded-lg shadow-sm border p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
-              <User className="h-5 w-5 mr-2 text-purple-600" />
-              Yönetim
-            </h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Şube Müdürü *
+                  Müdür <span className="text-red-500">*</span>
                 </label>
                 <select
-                  value={formData.managerId}
-                  onChange={(e) => handleInputChange('managerId', e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.managerId ? 'border-red-300' : 'border-gray-300'
+                  value={formData.manager_id}
+                  onChange={(e) => setFormData({...formData, manager_id: e.target.value})}
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.manager_id ? 'border-red-300' : 'border-gray-300'
                   }`}
                 >
-                  <option value="">Müdür seçiniz</option>
-                  {managers.map((manager) => (
-                    <option key={manager.id} value={manager.id}>
-                      {manager.name} - {manager.email}
+                  <option value="">Müdür Seçin</option>
+                  {users.map(user => (
+                    <option key={user.id} value={user.id}>
+                      {user.username} ({user.email})
                     </option>
                   ))}
                 </select>
-                {errors.managerId && (
+                {errors.manager_id && (
                   <p className="mt-1 text-sm text-red-600 flex items-center">
                     <AlertCircle className="h-4 w-4 mr-1" />
-                    {errors.managerId}
+                    {errors.manager_id}
                   </p>
                 )}
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Saat Dilimi
-                </label>
-                <select
-                  value={formData.timezone}
-                  onChange={(e) => handleInputChange('timezone', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="Europe/Istanbul">Türkiye (UTC+3)</option>
-                  <option value="Europe/London">Londra (UTC+0)</option>
-                  <option value="Europe/Paris">Paris (UTC+1)</option>
-                  <option value="America/New_York">New York (UTC-5)</option>
-                </select>
-              </div>
             </div>
-          </div>
 
-          {/* Settings */}
-          <div className="bg-white rounded-lg shadow-sm border p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
-              <CheckCircle className="h-5 w-5 mr-2 text-orange-600" />
-              Ayarlar
-            </h2>
-            
+            {/* Adres */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Adres <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={formData.address}
+                onChange={(e) => setFormData({...formData, address: e.target.value})}
+                rows={3}
+                className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  errors.address ? 'border-red-300' : 'border-gray-300'
+                }`}
+                placeholder="Kadıköy, İstanbul"
+              />
+              {errors.address && (
+                <p className="mt-1 text-sm text-red-600 flex items-center">
+                  <AlertCircle className="h-4 w-4 mr-1" />
+                  {errors.address}
+                </p>
+              )}
+            </div>
+
+            {/* Durum */}
             <div className="flex items-center">
               <input
                 type="checkbox"
-                id="isActive"
-                checked={formData.isActive}
-                onChange={(e) => handleInputChange('isActive', e.target.checked)}
+                id="is_active"
+                checked={formData.is_active}
+                onChange={(e) => setFormData({...formData, is_active: e.target.checked})}
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
               />
-              <label htmlFor="isActive" className="ml-2 block text-sm text-gray-900">
-                Şube aktif olsun
+              <label htmlFor="is_active" className="ml-2 block text-sm text-gray-900">
+                Aktif
               </label>
             </div>
-            <p className="mt-1 text-sm text-gray-500">
-              Aktif olmayan şubeler sisteme giriş yapamaz ve yeni kayıt alamaz.
-            </p>
-          </div>
 
-          {/* Form Actions */}
-          <div className="flex justify-end space-x-4">
-            <Link
-              href="/branches"
-              className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              İptal
-            </Link>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-            >
-              {isSubmitting ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  <span>Kaydediliyor...</span>
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4" />
-                  <span>Şubeyi Kaydet</span>
-                </>
-              )}
-            </button>
-          </div>
-        </form>
+            {/* Buttons */}
+            <div className="flex space-x-4 pt-6">
+              <Link
+                href="/branches"
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-3 rounded-xl font-semibold text-center transition-colors"
+              >
+                İptal
+              </Link>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-6 py-3 rounded-xl font-semibold flex items-center justify-center space-x-2 transition-colors"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    <span>Kaydediliyor...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-5 w-5" />
+                    <span>Şube Oluştur</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );
