@@ -30,7 +30,10 @@ import {
   ChevronDown,
   ChevronUp,
   Check,
-  X
+  X,
+  FileText,
+  FileDown,
+  Settings
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -59,6 +62,21 @@ interface ChartConfig {
   title: string;
 }
 
+// Yeni grafik konfigürasyonu interface'i
+interface AdvancedChartConfig {
+  type: 'bar' | 'line' | 'pie' | 'area' | 'scatter' | 'heatmap' | 'radar' | 'table';
+  xAxis: string;
+  yAxis: string;
+  series: string[];
+  title: string;
+  // Yeni özellikler
+  xAxisType: 'categorical' | 'numeric' | 'date';
+  yAxisType: 'categorical' | 'numeric' | 'date';
+  aggregation: 'sum' | 'count' | 'average' | 'min' | 'max';
+  groupBy?: string; // Gruplama için
+  sortBy?: 'asc' | 'desc'; // Sıralama
+}
+
 interface FilterOption {
   column: string;
   values: string[];
@@ -77,6 +95,7 @@ export default function ReportDetailPage() {
   
   // Grafik ve filtreleme state'leri
   const [chartConfig, setChartConfig] = useState<ChartConfig | null>(null);
+  const [advancedChartConfig, setAdvancedChartConfig] = useState<AdvancedChartConfig | null>(null);
   const [filters, setFilters] = useState<Record<string, any>>({});
   const [multiSelectFilters, setMultiSelectFilters] = useState<Record<string, string[]>>({});
   const [filteredData, setFilteredData] = useState<any[]>([]);
@@ -84,6 +103,7 @@ export default function ReportDetailPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [showChart, setShowChart] = useState(true);
   const [showChartSuggestions, setShowChartSuggestions] = useState(false);
+  const [showAdvancedChartConfig, setShowAdvancedChartConfig] = useState(false);
 
   // Minimize/maximize state'leri
   const [minimizedSuggestions, setMinimizedSuggestions] = useState(false);
@@ -226,6 +246,11 @@ export default function ReportDetailPage() {
     // Tekli filtreler
     Object.entries(filters).forEach(([key, value]) => {
       if (value && value !== '') {
+        // Aralık filtreleri için özel kontrol
+        if (key.includes('_min') || key.includes('_max') || key.includes('_start') || key.includes('_end') || key.includes('_search')) {
+          return; // Bu filtreler ayrı işlenecek
+        }
+        
         filtered = filtered.filter(item => {
           const itemValue = item[key];
           if (itemValue === null || itemValue === undefined) return false;
@@ -234,6 +259,54 @@ export default function ReportDetailPage() {
             return String(itemValue).toLowerCase().includes(value.toLowerCase());
           }
           return String(itemValue) === String(value);
+        });
+      }
+    });
+
+    // Sayısal aralık filtreleri
+    analyzeData?.numericColumns.forEach(column => {
+      const minValue = filters[`${column}_min`];
+      const maxValue = filters[`${column}_max`];
+      
+      if (minValue || maxValue) {
+        filtered = filtered.filter(item => {
+          const itemValue = Number(item[column]);
+          if (isNaN(itemValue)) return false;
+          
+          if (minValue && maxValue) {
+            return itemValue >= Number(minValue) && itemValue <= Number(maxValue);
+          } else if (minValue) {
+            return itemValue >= Number(minValue);
+          } else if (maxValue) {
+            return itemValue <= Number(maxValue);
+          }
+          return true;
+        });
+      }
+    });
+
+    // Tarih aralık filtreleri
+    analyzeData?.dateColumns.forEach(column => {
+      const startDate = filters[`${column}_start`];
+      const endDate = filters[`${column}_end`];
+      
+      if (startDate || endDate) {
+        filtered = filtered.filter(item => {
+          const itemDate = new Date(item[column]);
+          if (isNaN(itemDate.getTime())) return false;
+          
+          if (startDate && endDate) {
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            return itemDate >= start && itemDate <= end;
+          } else if (startDate) {
+            const start = new Date(startDate);
+            return itemDate >= start;
+          } else if (endDate) {
+            const end = new Date(endDate);
+            return itemDate <= end;
+          }
+          return true;
         });
       }
     });
@@ -250,12 +323,20 @@ export default function ReportDetailPage() {
     });
 
     return filtered;
-  }, [queryResult?.results, filters, multiSelectFilters]);
+  }, [queryResult?.results, filters, multiSelectFilters, analyzeData]);
 
   // filteredData'yı güncelle
   useEffect(() => {
     setFilteredData(applyFilters);
   }, [applyFilters]);
+
+  // Grafik verilerini filtreleme değişikliklerinde güncelle
+  useEffect(() => {
+    if (advancedChartConfig && filteredData.length > 0) {
+      // Grafik verileri otomatik olarak güncellenir
+      // prepareChartData() fonksiyonu filteredData'yı kullanır
+    }
+  }, [filteredData, advancedChartConfig]);
 
   // Filtreleme seçeneklerini oluştur
   const getFilterOptions = (column: string) => {
@@ -263,6 +344,93 @@ export default function ReportDetailPage() {
     
     const uniqueValues = [...new Set(queryResult.results.map(item => item[column]))];
     return uniqueValues.filter(v => v !== null && v !== undefined).slice(0, 50);
+  };
+
+  // Gelişmiş grafik konfigürasyonu oluştur
+  const createAdvancedChartConfig = (type: string, xAxis: string, yAxis: string): AdvancedChartConfig | null => {
+    if (!analyzeData) return null;
+
+    const xAxisType: 'categorical' | 'numeric' | 'date' = analyzeData.numericColumns.includes(xAxis) ? 'numeric' : 
+                     analyzeData.dateColumns.includes(xAxis) ? 'date' : 'categorical';
+    
+    const yAxisType: 'categorical' | 'numeric' | 'date' = analyzeData.numericColumns.includes(yAxis) ? 'numeric' : 
+                     analyzeData.dateColumns.includes(yAxis) ? 'date' : 'categorical';
+
+    return {
+      type: type as any,
+      xAxis,
+      yAxis,
+      series: [yAxis],
+      title: `${savedQuery?.name || 'Rapor'} - ${type.toUpperCase()} Grafik`,
+      xAxisType,
+      yAxisType,
+      aggregation: 'sum' as const,
+      groupBy: xAxis,
+      sortBy: 'desc' as const
+    };
+  };
+
+  // Grafik verilerini hazırla (filtrelenmiş veriye göre)
+  const prepareChartData = () => {
+    if (!advancedChartConfig || !filteredData.length) return null;
+
+    const { type, xAxis, yAxis, aggregation, groupBy, sortBy } = advancedChartConfig;
+
+    // Gruplama ve toplama
+    const groupedData = new Map();
+    
+    filteredData.forEach(item => {
+      const groupKey = item[groupBy || xAxis];
+      const value = Number(item[yAxis]) || 0;
+      
+      if (!groupedData.has(groupKey)) {
+        groupedData.set(groupKey, { count: 0, sum: 0, values: [] });
+      }
+      
+      const group = groupedData.get(groupKey);
+      group.count++;
+      group.sum += value;
+      group.values.push(value);
+    });
+
+    // Sonuçları hesapla
+    const chartData = Array.from(groupedData.entries()).map(([key, data]: [string, any]) => {
+      let aggregatedValue = 0;
+      
+      switch (aggregation) {
+        case 'sum':
+          aggregatedValue = data.sum;
+          break;
+        case 'count':
+          aggregatedValue = data.count;
+          break;
+        case 'average':
+          aggregatedValue = data.sum / data.count;
+          break;
+        case 'min':
+          aggregatedValue = Math.min(...data.values);
+          break;
+        case 'max':
+          aggregatedValue = Math.max(...data.values);
+          break;
+      }
+
+      return {
+        label: String(key).substring(0, 20),
+        value: aggregatedValue,
+        originalKey: key,
+        count: data.count
+      };
+    });
+
+    // Sıralama
+    if (sortBy === 'asc') {
+      chartData.sort((a, b) => a.value - b.value);
+    } else {
+      chartData.sort((a, b) => b.value - a.value);
+    }
+
+    return chartData.slice(0, 20); // En fazla 20 veri
   };
 
   // Çoklu seçim filtre ekleme/çıkarma
@@ -281,6 +449,255 @@ export default function ReportDetailPage() {
         };
       }
     });
+  };
+
+  // CSV İndirme Fonksiyonu
+  const downloadCSV = () => {
+    if (!filteredData.length) return;
+    
+    // Türkçe karakter desteği için BOM ekle
+    const BOM = '\uFEFF';
+    
+    // CSV başlıkları (Türkçe)
+    const headers = Object.keys(filteredData[0]);
+    const csvHeaders = headers.map(header => `"${header}"`).join(';');
+    
+    // CSV satırları
+    const csvRows = filteredData.map(row => 
+      headers.map(header => {
+        const value = row[header];
+        // Türkçe karakterleri koru ve özel karakterleri escape et
+        const escapedValue = String(value || '').replace(/"/g, '""');
+        return `"${escapedValue}"`;
+      }).join(';')
+    );
+    
+    // CSV içeriği
+    const csvContent = BOM + csvHeaders + '\n' + csvRows.join('\n');
+    
+    // Dosya indirme
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${savedQuery?.name || 'rapor'}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // PDF İndirme Fonksiyonu
+  const downloadPDF = async () => {
+    if (!filteredData.length || !analyzeData) return;
+    
+    try {
+      // PDF oluşturma için html2canvas ve jsPDF kullan
+      const { jsPDF } = await import('jspdf');
+      const html2canvas = await import('html2canvas');
+      
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      let currentY = 20;
+      
+      // Başlık - Daha büyük ve güzel
+      pdf.setFontSize(24);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(44, 62, 80); // Koyu mavi
+      pdf.text(savedQuery?.name || 'Rapor', pageWidth / 2, currentY, { align: 'center' });
+      currentY += 20;
+      
+      // Tarih - Daha şık
+      pdf.setFontSize(12);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(52, 73, 94); // Orta mavi
+      pdf.text(`Oluşturulma Tarihi: ${new Date().toLocaleDateString('tr-TR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })}`, pageWidth / 2, currentY, { align: 'center' });
+      currentY += 15;
+      
+      // Özet İstatistikler - Kutu içinde
+      pdf.setFillColor(236, 240, 241); // Açık gri arka plan
+      pdf.rect(15, currentY - 5, pageWidth - 30, 25, 'F');
+      pdf.setFontSize(16);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(44, 62, 80);
+      pdf.text('📊 Özet İstatistikler', 20, currentY);
+      currentY += 12;
+      
+      pdf.setFontSize(11);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(52, 73, 94);
+      pdf.text(`• Toplam Kayıt: ${filteredData.length.toLocaleString('tr-TR')}`, 20, currentY);
+      currentY += 7;
+      
+      if (analyzeData.numericColumns.length > 0) {
+        const totalValue = filteredData.reduce((sum, item) => {
+          const value = item[analyzeData.numericColumns[0]];
+          return sum + (value !== null && value !== undefined ? Number(value) || 0 : 0);
+        }, 0);
+        pdf.text(`• Toplam ${analyzeData.numericColumns[0]}: ${totalValue.toLocaleString('tr-TR')}`, 20, currentY);
+        currentY += 7;
+      }
+      
+      // Kategori kolonları için özet
+      if (analyzeData.categoricalColumns.length > 0) {
+        const firstCatColumn = analyzeData.categoricalColumns[0];
+        const uniqueValues = [...new Set(filteredData.map(item => item[firstCatColumn]))];
+        pdf.text(`• ${firstCatColumn} Çeşitliliği: ${uniqueValues.length} farklı değer`, 20, currentY);
+        currentY += 7;
+      }
+      
+      currentY += 15;
+      
+      // Grafik ekleme (eğer varsa)
+      if (showChart && chartConfig) {
+        pdf.setFontSize(16);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(44, 62, 80);
+        pdf.text('📈 Grafik Analizi', 20, currentY);
+        currentY += 10;
+        
+        // Grafik container'ını bul ve canvas'a çevir
+        const chartContainer = document.querySelector('.chart-container') || document.querySelector('[data-chart]');
+        if (chartContainer && chartContainer instanceof HTMLElement) {
+          try {
+            const canvas = await html2canvas.default(chartContainer, {
+              scale: 2,
+              useCORS: true,
+              allowTaint: true,
+              backgroundColor: '#ffffff'
+            });
+            
+            const imgData = canvas.toDataURL('image/png');
+            const imgWidth = 170;
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+            
+            // Sayfa kontrolü
+            if (currentY + imgHeight > pageHeight - 30) {
+              pdf.addPage();
+              currentY = 20;
+            }
+            
+            // Grafik için çerçeve
+            pdf.setDrawColor(189, 195, 199);
+            pdf.setLineWidth(0.5);
+            pdf.rect(15, currentY - 5, imgWidth + 10, imgHeight + 10);
+            
+            pdf.addImage(imgData, 'PNG', 20, currentY, imgWidth, imgHeight);
+            currentY += imgHeight + 15;
+          } catch (error) {
+            pdf.setTextColor(231, 76, 60); // Kırmızı
+            pdf.text('⚠️ Grafik yüklenemedi', 20, currentY);
+            currentY += 10;
+          }
+        }
+      }
+      
+      // Veri tablosu - Daha profesyonel
+      pdf.setFontSize(16);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(44, 62, 80);
+      pdf.text('📋 Veri Özeti (İlk 50 Kayıt)', 20, currentY);
+      currentY += 12;
+      
+      const tableData = filteredData.slice(0, 50);
+      const columns = Object.keys(tableData[0] || {});
+      
+      // Tablo başlıkları - Renkli arka plan
+      pdf.setFillColor(52, 152, 219); // Mavi arka plan
+      pdf.rect(15, currentY - 3, pageWidth - 30, 8, 'F');
+      
+      pdf.setFontSize(9);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(255, 255, 255); // Beyaz yazı
+      let xPos = 20;
+      columns.forEach((column, index) => {
+        if (xPos < pageWidth - 25) {
+          const columnName = column.length > 12 ? column.substring(0, 12) + '...' : column;
+          pdf.text(columnName, xPos, currentY);
+          xPos += 35;
+        }
+      });
+      currentY += 8;
+      
+      // Tablo satırları - Zebra striping
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'normal');
+      tableData.forEach((row, rowIndex) => {
+        if (currentY > pageHeight - 25) {
+          pdf.addPage();
+          currentY = 20;
+        }
+        
+        // Zebra striping
+        if (rowIndex % 2 === 0) {
+          pdf.setFillColor(248, 249, 250);
+          pdf.rect(15, currentY - 2, pageWidth - 30, 6, 'F');
+        }
+        
+        xPos = 20;
+        pdf.setTextColor(52, 73, 94);
+        columns.forEach((column, colIndex) => {
+          if (xPos < pageWidth - 25) {
+            const value = String(row[column] || '').substring(0, 15);
+            pdf.text(value, xPos, currentY);
+            xPos += 35;
+          }
+        });
+        currentY += 6;
+      });
+      
+      // Filtre bilgileri - Özel kutu
+      currentY += 15;
+      pdf.setFillColor(236, 240, 241);
+      pdf.rect(15, currentY - 5, pageWidth - 30, 20, 'F');
+      
+      pdf.setFontSize(12);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(44, 62, 80);
+      pdf.text('🔍 Uygulanan Filtreler:', 20, currentY);
+      currentY += 8;
+      
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(52, 73, 94);
+      const activeFilters = Object.keys(filters).filter(key => filters[key] && filters[key] !== '');
+      const activeMultiFilters = Object.keys(multiSelectFilters).filter(key => multiSelectFilters[key] && multiSelectFilters[key].length > 0);
+      
+      if (activeFilters.length === 0 && activeMultiFilters.length === 0) {
+        pdf.text('• Filtre uygulanmadı', 20, currentY);
+      } else {
+        activeFilters.forEach(filter => {
+          pdf.text(`• ${filter}: ${filters[filter]}`, 20, currentY);
+          currentY += 5;
+        });
+        
+        activeMultiFilters.forEach(filter => {
+          pdf.text(`• ${filter}: ${multiSelectFilters[filter].join(', ')}`, 20, currentY);
+          currentY += 5;
+        });
+      }
+      
+      // Alt bilgi
+      currentY += 10;
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'italic');
+      pdf.setTextColor(149, 165, 166);
+      pdf.text(`HBYS Rapor Sistemi tarafından oluşturuldu - ${new Date().toLocaleString('tr-TR')}`, pageWidth / 2, currentY, { align: 'center' });
+      
+      // PDF'i indir
+      pdf.save(`${savedQuery?.name || 'rapor'}_${new Date().toISOString().split('T')[0]}.pdf`);
+      
+    } catch (error) {
+      console.error('PDF oluşturma hatası:', error);
+      alert('PDF oluşturulurken hata oluştu!');
+    }
   };
 
   const loadSavedQuery = async (id: string) => {
@@ -345,6 +762,16 @@ export default function ReportDetailPage() {
           if (analyzeData?.suggestedChart) {
             setChartConfig(analyzeData.suggestedChart);
             setSelectedChartType(analyzeData.suggestedChart.type);
+            
+            // Gelişmiş grafik konfigürasyonunu da oluştur
+            if (analyzeData.categoricalColumns.length > 0 && analyzeData.numericColumns.length > 0) {
+              const advancedConfig = createAdvancedChartConfig(
+                'bar',
+                analyzeData.categoricalColumns[0],
+                analyzeData.numericColumns[0]
+              );
+              setAdvancedChartConfig(advancedConfig);
+            }
           }
         }, 100);
       } else {
@@ -359,6 +786,192 @@ export default function ReportDetailPage() {
 
   // Grafik render fonksiyonu
   const renderChart = () => {
+    // Önce gelişmiş konfigürasyonu kontrol et
+    if (advancedChartConfig && filteredData.length) {
+      const chartData = prepareChartData();
+      if (!chartData) return null;
+
+      const { type, xAxis, yAxis, aggregation } = advancedChartConfig;
+      
+      switch (type) {
+        case 'bar':
+          const maxBarValue = Math.max(...chartData.map(d => d.value));
+          return (
+            <div className="bg-white p-6 rounded-xl shadow-lg">
+              <h3 className="text-lg font-semibold mb-4 text-gray-800">
+                {aggregation === 'sum' ? 'Toplam' : 
+                 aggregation === 'count' ? 'Sayı' : 
+                 aggregation === 'average' ? 'Ortalama' : 
+                 aggregation === 'min' ? 'Minimum' : 'Maksimum'} {yAxis} - {xAxis}
+              </h3>
+              <div className="h-64 flex items-end justify-center space-x-2 relative overflow-x-auto">
+                {/* Y ekseni etiketleri */}
+                <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-xs text-gray-500 pr-2 z-10">
+                  {[0, 25, 50, 75, 100].map(percent => (
+                    <span key={percent} className="transform -translate-y-1/2">
+                      {Math.round((maxBarValue * percent) / 100)}
+                    </span>
+                  ))}
+                </div>
+                
+                {/* Grid çizgileri */}
+                <div className="absolute inset-0 flex flex-col justify-between">
+                  {[0, 25, 50, 75, 100].map(percent => (
+                    <div key={percent} className="border-t border-gray-200 w-full"></div>
+                  ))}
+                </div>
+                
+                {/* Bar'lar */}
+                <div className="flex items-end space-x-3 min-w-max px-8">
+                  {chartData.map((item, index) => {
+                    const barHeight = maxBarValue > 0 ? (item.value / maxBarValue) * 200 : 0;
+                    const percentage = maxBarValue > 0 ? (item.value / maxBarValue) * 100 : 0;
+                    
+                    return (
+                      <div key={index} className="flex flex-col items-center relative group">
+                        {/* Tooltip */}
+                        <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                          <div className="text-center">
+                            <div className="font-semibold">{item.label}</div>
+                            <div>{item.value.toFixed(2)} ({percentage.toFixed(1)}%)</div>
+                            <div className="text-xs text-gray-300">{item.count} kayıt</div>
+                          </div>
+                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                        </div>
+                        
+                        {/* Bar */}
+                        <div className="relative">
+                          <div 
+                            className="w-12 bg-gradient-to-t from-blue-600 via-blue-500 to-blue-400 rounded-t shadow-lg transition-all duration-500 hover:from-blue-700 hover:via-blue-600 hover:to-blue-500 hover:shadow-xl hover:scale-105 cursor-pointer"
+                            style={{ 
+                              height: `${Math.max(barHeight, 4)}px`,
+                              animationDelay: `${index * 100}ms`
+                            }}
+                          >
+                            {/* Bar içi desen */}
+                            <div className="w-full h-full bg-gradient-to-t from-blue-600 via-blue-500 to-blue-400 rounded-t opacity-90"></div>
+                          </div>
+                          
+                          {/* Değer etiketi */}
+                          <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 text-xs font-bold text-gray-700 bg-white px-2 py-1 rounded shadow-sm border border-gray-200">
+                            {item.value.toFixed(1)}
+                          </div>
+                        </div>
+                        
+                        {/* X ekseni etiketi */}
+                        <div className="mt-3 text-center">
+                          <span 
+                            className="text-xs text-gray-600 font-medium leading-tight block max-w-20 truncate" 
+                            title={item.label}
+                            style={{
+                              transform: 'rotate(-45deg)',
+                              transformOrigin: 'top left',
+                              marginTop: '8px',
+                              marginLeft: '10px'
+                            }}
+                          >
+                            {item.label}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+
+        case 'pie':
+          const totalPieValue = chartData.reduce((sum, item) => sum + item.value, 0);
+          return (
+            <div className="bg-white p-6 rounded-xl shadow-lg">
+              <h3 className="text-lg font-semibold mb-4 text-gray-800">
+                {aggregation === 'sum' ? 'Toplam' : 
+                 aggregation === 'count' ? 'Sayı' : 
+                 aggregation === 'average' ? 'Ortalama' : 
+                 aggregation === 'min' ? 'Minimum' : 'Maksimum'} {yAxis} Dağılımı
+              </h3>
+              <div className="flex items-center justify-center">
+                <div className="relative w-64 h-64">
+                  {/* Pasta grafik */}
+                  <svg className="w-full h-full" viewBox="0 0 100 100">
+                    {chartData.map((item, index) => {
+                      const percentage = totalPieValue > 0 ? (item.value / totalPieValue) * 100 : 0;
+                      const startAngle = chartData.slice(0, index).reduce((sum, d) => 
+                        sum + (totalPieValue > 0 ? (d.value / totalPieValue) * 360 : 0), 0
+                      );
+                      const endAngle = startAngle + (percentage * 360) / 100;
+                      
+                      // Renk paleti
+                      const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4', '#84CC16', '#F97316'];
+                      const color = colors[index % colors.length];
+                      
+                      // Pasta dilimi çiz
+                      const x1 = 50 + 35 * Math.cos(startAngle * Math.PI / 180);
+                      const y1 = 50 + 35 * Math.sin(startAngle * Math.PI / 180);
+                      const x2 = 50 + 35 * Math.cos(endAngle * Math.PI / 180);
+                      const y2 = 50 + 35 * Math.sin(endAngle * Math.PI / 180);
+                      
+                      const largeArcFlag = percentage > 50 ? 1 : 0;
+                      
+                      return (
+                        <g key={index}>
+                          <path
+                            d={`M 50 50 L ${x1} ${y1} A 35 35 0 ${largeArcFlag} 1 ${x2} ${y2} Z`}
+                            fill={color}
+                            stroke="white"
+                            strokeWidth="0.5"
+                            className="hover:opacity-80 transition-opacity cursor-pointer"
+                          />
+                        </g>
+                      );
+                    })}
+                  </svg>
+                  
+                  {/* Merkez bilgi */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-gray-800">{chartData.length}</div>
+                      <div className="text-sm text-gray-600">Kategori</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Legend */}
+              <div className="mt-6 grid grid-cols-2 gap-2">
+                {chartData.slice(0, 8).map((item, index) => {
+                  const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4', '#84CC16', '#F97316'];
+                  const color = colors[index % colors.length];
+                  const percentage = totalPieValue > 0 ? (item.value / totalPieValue) * 100 : 0;
+                  
+                  return (
+                    <div key={index} className="flex items-center gap-2 text-sm">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }}></div>
+                      <span className="truncate">{item.label}</span>
+                      <span className="text-gray-500">({percentage.toFixed(1)}%)</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+
+        default:
+          return (
+            <div className="bg-white p-6 rounded-xl shadow-lg">
+              <h3 className="text-lg font-semibold mb-4 text-gray-800">
+                {type.charAt(0).toUpperCase() + type.slice(1)} Grafik - {yAxis} vs {xAxis}
+              </h3>
+              <div className="h-64 flex items-center justify-center text-gray-500">
+                Bu grafik türü henüz desteklenmiyor. Bar veya Pasta grafik kullanın.
+              </div>
+            </div>
+          );
+      }
+    }
+
+    // Eski grafik sistemi (geriye uyumluluk için)
     if (!chartConfig || !filteredData.length) return null;
 
     const { type, xAxis, yAxis } = chartConfig;
@@ -385,7 +998,7 @@ export default function ReportDetailPage() {
         return (
           <div className="bg-white p-6 rounded-xl shadow-lg">
             <h3 className="text-lg font-semibold mb-4 text-gray-800">Bar Grafik - {yAxis} vs {xAxis}</h3>
-            <div className="h-64 flex items-end justify-center space-x-3 relative">
+            <div className="h-64 flex items-end justify-center space-x-3 relative overflow-x-auto">
               {/* Y ekseni etiketleri */}
               <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-xs text-gray-500 pr-2">
                 {[0, 25, 50, 75, 100].map(percent => (
@@ -403,49 +1016,62 @@ export default function ReportDetailPage() {
               </div>
               
               {/* Bar'lar */}
-              {barData.map((item, index) => {
-                const value = getSafeValue(item, yAxis);
-                const barHeight = maxBarValue > 0 ? (value / maxBarValue) * 200 : 0;
-                const label = getSafeString(item, xAxis).substring(0, 12);
-                const percentage = maxBarValue > 0 ? (value / maxBarValue) * 100 : 0;
-                
-                return (
-                  <div key={index} className="flex flex-col items-center relative group">
-                    {/* Tooltip */}
-                    <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
-                      <div className="text-center">
-                        <div className="font-semibold">{label}</div>
-                        <div>{value} ({percentage.toFixed(1)}%)</div>
-                      </div>
-                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
-                    </div>
-                    
-                    {/* Bar */}
-                    <div className="relative">
-                      <div 
-                        className="w-12 bg-gradient-to-t from-blue-600 via-blue-500 to-blue-400 rounded-t shadow-lg transition-all duration-500 hover:from-blue-700 hover:via-blue-600 hover:to-blue-500 hover:shadow-xl hover:scale-105 cursor-pointer"
-                        style={{ 
-                          height: `${Math.max(barHeight, 4)}px`,
-                          animationDelay: `${index * 100}ms`
-                        }}
-                      >
-                        {/* Bar içi desen */}
-                        <div className="w-full h-full bg-gradient-to-t from-blue-600 via-blue-500 to-blue-400 rounded-t opacity-90"></div>
+              <div className="flex items-end space-x-3 min-w-max px-8">
+                {barData.map((item, index) => {
+                  const value = getSafeValue(item, yAxis);
+                  const barHeight = maxBarValue > 0 ? (value / maxBarValue) * 200 : 0;
+                  const label = getSafeString(item, xAxis).substring(0, 15);
+                  const percentage = maxBarValue > 0 ? (value / maxBarValue) * 100 : 0;
+                  
+                  return (
+                    <div key={index} className="flex flex-col items-center relative group">
+                      {/* Tooltip */}
+                      <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                        <div className="text-center">
+                          <div className="font-semibold">{label}</div>
+                          <div>{value} ({percentage.toFixed(1)}%)</div>
+                        </div>
+                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
                       </div>
                       
-                      {/* Değer etiketi */}
-                      <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 text-xs font-bold text-gray-700 bg-white px-2 py-1 rounded shadow-sm border border-gray-200">
-                        {value}
+                      {/* Bar */}
+                      <div className="relative">
+                        <div 
+                          className="w-12 bg-gradient-to-t from-blue-600 via-blue-500 to-blue-400 rounded-t shadow-lg transition-all duration-500 hover:from-blue-700 hover:via-blue-600 hover:to-blue-500 hover:shadow-xl hover:scale-105 cursor-pointer"
+                          style={{ 
+                            height: `${Math.max(barHeight, 4)}px`,
+                            animationDelay: `${index * 100}ms`
+                          }}
+                        >
+                          {/* Bar içi desen */}
+                          <div className="w-full h-full bg-gradient-to-t from-blue-600 via-blue-500 to-blue-400 rounded-t opacity-90"></div>
+                        </div>
+                        
+                        {/* Değer etiketi */}
+                        <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 text-xs font-bold text-gray-700 bg-white px-2 py-1 rounded shadow-sm border border-gray-200">
+                          {value}
+                        </div>
+                      </div>
+                      
+                      {/* X ekseni etiketi */}
+                      <div className="mt-3 text-center">
+                        <span 
+                          className="text-xs text-gray-600 font-medium leading-tight block max-w-20 truncate" 
+                          title={label}
+                          style={{
+                            transform: 'rotate(-45deg)',
+                            transformOrigin: 'top left',
+                            marginTop: '8px',
+                            marginLeft: '10px'
+                          }}
+                        >
+                          {label}
+                        </span>
                       </div>
                     </div>
-                    
-                    {/* X ekseni etiketi */}
-                    <span className="text-xs mt-3 text-gray-600 text-center w-16 font-medium leading-tight">
-                      {label}
-                    </span>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
         );
@@ -951,6 +1577,28 @@ export default function ReportDetailPage() {
                 {executing ? 'Çalıştırılıyor...' : 'Yeniden Çalıştır'}
               </button>
               
+              {/* CSV İndirme Butonu */}
+              <button
+                onClick={downloadCSV}
+                disabled={!filteredData.length}
+                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+                title="CSV olarak indir (Türkçe karakter desteği ile)"
+              >
+                <FileDown className="h-4 w-4" />
+                CSV İndir
+              </button>
+              
+              {/* PDF İndirme Butonu */}
+              <button
+                onClick={downloadPDF}
+                disabled={!filteredData.length}
+                className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+                title="PDF olarak indir (Özet analiz ve grafikler ile)"
+              >
+                <FileText className="h-4 w-4" />
+                PDF İndir
+              </button>
+              
               <button
                 onClick={() => setShowFilters(!showFilters)}
                 className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
@@ -1052,93 +1700,233 @@ export default function ReportDetailPage() {
               Filtreler
             </h3>
             
-            {/* Tekli Filtreler */}
-            <div className="mb-6">
-              <h4 className="text-md font-medium text-gray-700 mb-3">Tekli Seçim Filtreleri</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {analyzeData.categoricalColumns.slice(0, 6).map(column => (
-                  <div key={column}>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      {column}
-                    </label>
-                    <select
-                      value={filters[column] || ''}
-                      onChange={(e) => setFilters(prev => ({ ...prev, [column]: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="">Tümü</option>
-                      {getFilterOptions(column).map((value, index) => (
-                        <option key={index} value={value}>
-                          {String(value).substring(0, 30)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Çoklu Seçim Filtreleri */}
-            <div className="mb-6">
-              <h4 className="text-md font-medium text-gray-700 mb-3">Çoklu Seçim Filtreleri</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {analyzeData.categoricalColumns.slice(0, 4).map(column => (
-                  <div key={column} className="bg-gray-50 p-4 rounded-lg">
-                    <label className="block text-sm font-medium text-gray-700 mb-3">
-                      {column} (Çoklu Seçim)
-                    </label>
-                    <div className="max-h-32 overflow-y-auto space-y-2">
-                      {getFilterOptions(column).map((value, index) => {
-                        const isSelected = (multiSelectFilters[column] || []).includes(String(value));
-                        return (
-                          <label key={index} className="flex items-center space-x-2 cursor-pointer">
+            {/* Yatay Kaydırılabilir Filtreler */}
+            <div className="overflow-x-auto pb-4">
+              <div className="flex gap-4 min-w-max">
+                {/* Tüm Kolonlar için Filtreler */}
+                {analyzeData.columns.map(column => {
+                  const isNumeric = analyzeData.numericColumns.includes(column);
+                  const isDate = analyzeData.dateColumns.includes(column);
+                  const isCategorical = analyzeData.categoricalColumns.includes(column);
+                  
+                  // Değer sayısını hesapla
+                  const uniqueValues = getFilterOptions(column);
+                  const valueCount = uniqueValues.length;
+                  
+                  // Filtre türünü belirle
+                  let filterType = 'search'; // varsayılan
+                  if (valueCount <= 10) {
+                    filterType = 'checkbox'; // Sadece checkbox
+                  } else if (valueCount <= 50) {
+                    filterType = 'mixed'; // Checkbox + arama
+                  } else {
+                    filterType = 'search'; // Sadece arama
+                  }
+                  
+                  return (
+                    <div key={column} className="min-w-[300px] bg-white p-4 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                      <label className="block text-sm font-medium text-gray-700 mb-3">
+                        {column}
+                        {isNumeric && <span className="text-blue-600 text-xs ml-2 font-medium">(Sayısal)</span>}
+                        {isDate && <span className="text-green-600 text-xs ml-2 font-medium">(Tarih)</span>}
+                        {isCategorical && <span className="text-purple-600 text-xs ml-2 font-medium">(Kategori - {valueCount} değer)</span>}
+                      </label>
+                      
+                      {/* Sayısal Kolonlar için Aralık Filtresi */}
+                      {isNumeric && (
+                        <div className="space-y-3">
+                          <div className="flex gap-2">
                             <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => toggleMultiSelectFilter(column, String(value))}
-                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              type="number"
+                              placeholder="Min"
+                              value={filters[`${column}_min`] || ''}
+                              onChange={(e) => setFilters(prev => ({ 
+                                ...prev, 
+                                [`${column}_min`]: e.target.value 
+                              }))}
+                              className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:border-gray-400 transition-colors"
                             />
-                            <span className="text-sm text-gray-700">
-                              {String(value).substring(0, 25)}
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                    {/* Seçili değerler */}
-                    {(multiSelectFilters[column] || []).length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-1">
-                        {multiSelectFilters[column].map((value, index) => (
-                          <span
-                            key={index}
-                            className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full"
+                            <input
+                              type="number"
+                              placeholder="Max"
+                              value={filters[`${column}_max`] || ''}
+                              onChange={(e) => setFilters(prev => ({ 
+                                ...prev, 
+                                [`${column}_max`]: e.target.value 
+                              }))}
+                              className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:border-gray-400 transition-colors"
+                            />
+                          </div>
+                          <input
+                            type="text"
+                            placeholder="Arama..."
+                            value={filters[column] || ''}
+                            onChange={(e) => setFilters(prev => ({ ...prev, [column]: e.target.value }))}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:border-gray-400 transition-colors"
+                          />
+                        </div>
+                      )}
+                      
+                      {/* Tarih Kolonlar için Aralık Filtresi */}
+                      {isDate && (
+                        <div className="space-y-3">
+                          <div className="flex gap-2">
+                            <input
+                              type="date"
+                              value={filters[`${column}_start`] || ''}
+                              onChange={(e) => setFilters(prev => ({ 
+                                ...prev, 
+                                [`${column}_start`]: e.target.value 
+                              }))}
+                              className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:border-gray-400 transition-colors"
+                            />
+                            <input
+                              type="date"
+                              value={filters[`${column}_end`] || ''}
+                              onChange={(e) => setFilters(prev => ({ 
+                                ...prev, 
+                                [`${column}_end`]: e.target.value 
+                              }))}
+                              className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:border-gray-400 transition-colors"
+                            />
+                          </div>
+                          <input
+                            type="text"
+                            placeholder="Arama..."
+                            value={filters[column] || ''}
+                            onChange={(e) => setFilters(prev => ({ ...prev, [column]: e.target.value }))}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:border-gray-400 transition-colors"
+                          />
+                        </div>
+                      )}
+                      
+                      {/* Kategori Kolonlar için Akıllı Filtreleme */}
+                      {isCategorical && (
+                        <div className="space-y-3">
+                          {/* Dropdown (her zaman) */}
+                          <select
+                            value={filters[column] || ''}
+                            onChange={(e) => setFilters(prev => ({ ...prev, [column]: e.target.value }))}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:border-gray-400 transition-colors"
                           >
-                            {value.substring(0, 20)}
-                            <button
-                              onClick={() => toggleMultiSelectFilter(column, value)}
-                              className="text-blue-600 hover:text-blue-800"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                            <option value="">Tümü</option>
+                            {uniqueValues.slice(0, 20).map((value, index) => (
+                              <option key={index} value={value}>
+                                {String(value).substring(0, 25)}
+                              </option>
+                            ))}
+                          </select>
+                          
+                          {/* Checkbox'lar - 10'dan az değer varsa */}
+                          {filterType === 'checkbox' && (
+                            <div className="max-h-32 overflow-y-auto space-y-2 p-2 bg-gray-50 rounded-lg border border-gray-200">
+                              {uniqueValues.map((value, index) => {
+                                const isSelected = (multiSelectFilters[column] || []).includes(String(value));
+                                return (
+                                  <label key={index} className="flex items-center space-x-2 cursor-pointer text-xs hover:bg-white hover:shadow-sm p-1 rounded transition-all">
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => toggleMultiSelectFilter(column, String(value))}
+                                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span className="truncate text-gray-700 font-medium">{String(value).substring(0, 20)}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
+                          
+                          {/* Karışık sistem - 10-50 arası değer varsa */}
+                          {filterType === 'mixed' && (
+                            <>
+                              <input
+                                type="text"
+                                placeholder="Arama..."
+                                value={filters[`${column}_search`] || ''}
+                                onChange={(e) => setFilters(prev => ({ 
+                                  ...prev, 
+                                  [`${column}_search`]: e.target.value 
+                                }))}
+                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:border-gray-400 transition-colors"
+                              />
+                              <div className="max-h-24 overflow-y-auto space-y-2 p-2 bg-gray-50 rounded-lg border border-gray-200">
+                                {uniqueValues
+                                  .filter(value => 
+                                    !filters[`${column}_search`] || 
+                                    String(value).toLowerCase().includes(filters[`${column}_search`].toLowerCase())
+                                  )
+                                  .slice(0, 15)
+                                  .map((value, index) => {
+                                    const isSelected = (multiSelectFilters[column] || []).includes(String(value));
+                                    return (
+                                      <label key={index} className="flex items-center space-x-2 cursor-pointer text-xs hover:bg-white hover:shadow-sm p-1 rounded transition-all">
+                                        <input
+                                          type="checkbox"
+                                          checked={isSelected}
+                                          onChange={() => toggleMultiSelectFilter(column, String(value))}
+                                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                        <span className="truncate text-gray-700 font-medium">{String(value).substring(0, 20)}</span>
+                                      </label>
+                                    );
+                                  })}
+                              </div>
+                            </>
+                          )}
+                          
+                          {/* Sadece arama - 50'den fazla değer varsa */}
+                          {filterType === 'search' && (
+                            <input
+                              type="text"
+                              placeholder="Arama..."
+                              value={filters[column] || ''}
+                              onChange={(e) => setFilters(prev => ({ ...prev, [column]: e.target.value }))}
+                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:border-gray-400 transition-colors"
+                            />
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* Genel Arama (Tüm kolonlar için) */}
+                      {!isNumeric && !isDate && !isCategorical && (
+                        <input
+                          type="text"
+                          placeholder="Arama..."
+                          value={filters[column] || ''}
+                          onChange={(e) => setFilters(prev => ({ ...prev, [column]: e.target.value }))}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:border-gray-400 transition-colors"
+                        />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
-
-            <div className="mt-4 flex justify-end space-x-3">
-              <button
-                onClick={() => {
-                  setFilters({});
-                  setMultiSelectFilters({});
-                }}
-                className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors"
-              >
-                Tüm Filtreleri Temizle
-              </button>
+            
+            {/* Filtre Kontrolleri */}
+            <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+              <div className="text-sm text-gray-600">
+                {Object.keys(filters).filter(key => filters[key] && filters[key] !== '').length + 
+                 Object.keys(multiSelectFilters).filter(key => multiSelectFilters[key] && multiSelectFilters[key].length > 0).length} aktif filtre
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setFilters({});
+                    setMultiSelectFilters({});
+                  }}
+                  className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Tüm Filtreleri Temizle
+                </button>
+                <button
+                  onClick={() => setShowFilters(false)}
+                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Filtreleri Uygula
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -1146,7 +1934,17 @@ export default function ReportDetailPage() {
         {/* Grafik Türü Seçimi */}
         {analyzeData && showChart && (
           <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-100">
-            <h3 className="text-lg font-semibold mb-4 text-gray-800">Grafik Türü</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-800">Grafik Türü</h3>
+              <button
+                onClick={() => setShowAdvancedChartConfig(!showAdvancedChartConfig)}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 text-sm"
+              >
+                <Settings className="h-4 w-4" />
+                Gelişmiş Ayarlar
+              </button>
+            </div>
+            
             <div className="flex flex-wrap gap-3">
               {['bar', 'line', 'pie', 'area', 'scatter', 'heatmap'].map(type => (
                 <button
@@ -1179,12 +1977,159 @@ export default function ReportDetailPage() {
           </div>
         )}
 
+        {/* Gelişmiş Grafik Konfigürasyonu */}
+        {showAdvancedChartConfig && analyzeData && (
+          <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-100">
+            <h3 className="text-lg font-semibold mb-4 text-gray-800 flex items-center gap-2">
+              <Settings className="h-5 w-5 text-purple-600" />
+              Gelişmiş Grafik Ayarları
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* X Ekseni Seçimi */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">X Ekseni (Kategori/Tarih)</label>
+                <select
+                  value={advancedChartConfig?.xAxis || ''}
+                  onChange={(e) => {
+                    const newConfig = createAdvancedChartConfig(
+                      selectedChartType,
+                      e.target.value,
+                      advancedChartConfig?.yAxis || analyzeData.numericColumns[0] || ''
+                    );
+                    setAdvancedChartConfig(newConfig);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">X Ekseni Seçin</option>
+                  {analyzeData.categoricalColumns.map(col => (
+                    <option key={col} value={col}>{col}</option>
+                  ))}
+                  {analyzeData.dateColumns.map(col => (
+                    <option key={col} value={col}>{col} (Tarih)</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Y Ekseni Seçimi */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Y Ekseni (Sayısal Değer)</label>
+                <select
+                  value={advancedChartConfig?.yAxis || ''}
+                  onChange={(e) => {
+                    const newConfig = createAdvancedChartConfig(
+                      selectedChartType,
+                      advancedChartConfig?.xAxis || analyzeData.categoricalColumns[0] || '',
+                      e.target.value
+                    );
+                    setAdvancedChartConfig(newConfig);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Y Ekseni Seçin</option>
+                  {analyzeData.numericColumns.map(col => (
+                    <option key={col} value={col}>{col}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Toplama Yöntemi */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Toplama Yöntemi</label>
+                <select
+                  value={advancedChartConfig?.aggregation || 'sum'}
+                  onChange={(e) => {
+                    if (advancedChartConfig) {
+                      setAdvancedChartConfig({
+                        ...advancedChartConfig,
+                        aggregation: e.target.value as any
+                      });
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="sum">Toplam</option>
+                  <option value="count">Sayı</option>
+                  <option value="average">Ortalama</option>
+                  <option value="min">Minimum</option>
+                  <option value="max">Maksimum</option>
+                </select>
+              </div>
+
+              {/* Sıralama */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Sıralama</label>
+                <select
+                  value={advancedChartConfig?.sortBy || 'desc'}
+                  onChange={(e) => {
+                    if (advancedChartConfig) {
+                      setAdvancedChartConfig({
+                        ...advancedChartConfig,
+                        sortBy: e.target.value as any
+                      });
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="desc">Azalan (Büyükten Küçüğe)</option>
+                  <option value="asc">Artan (Küçükten Büyüğe)</option>
+                </select>
+              </div>
+
+              {/* Grafik Türü */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Grafik Türü</label>
+                <select
+                  value={advancedChartConfig?.type || selectedChartType}
+                  onChange={(e) => {
+                    if (advancedChartConfig) {
+                      setAdvancedChartConfig({
+                        ...advancedChartConfig,
+                        type: e.target.value as any
+                      });
+                      setSelectedChartType(e.target.value as any);
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="bar">Bar Grafik</option>
+                  <option value="line">Çizgi Grafik</option>
+                  <option value="pie">Pasta Grafik</option>
+                  <option value="area">Alan Grafik</option>
+                  <option value="scatter">Dağılım Grafik</option>
+                </select>
+              </div>
+
+              {/* Uygula Butonu */}
+              <div className="md:col-span-2 lg:col-span-3">
+                <button
+                  onClick={() => {
+                    if (advancedChartConfig?.xAxis && advancedChartConfig?.yAxis) {
+                      setShowAdvancedChartConfig(false);
+                    } else {
+                      alert('Lütfen X ve Y eksenlerini seçin!');
+                    }
+                  }}
+                  disabled={!advancedChartConfig?.xAxis || !advancedChartConfig?.yAxis}
+                  className="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                >
+                  ✅ Grafiği Uygula
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Grafik ve Veri */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Grafik */}
           {showChart && (
             <div className="space-y-6">
-              {renderChart()}
+              <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+                <div data-chart="true" className="chart-container">
+                  {renderChart()}
+                </div>
+              </div>
               
               {/* İstatistikler */}
               {filteredData.length > 0 && (
@@ -1240,12 +2185,12 @@ export default function ReportDetailPage() {
             {/* Table content - conditionally rendered */}
             {!minimizedDataTable && (
               <>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
+                <div className="overflow-x-auto max-w-full">
+                  <table className="w-full min-w-max">
                     <thead className="bg-gray-50">
                       <tr>
                         {queryResult?.results[0] && Object.keys(queryResult.results[0]).map((column) => (
-                          <th key={column} className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th key={column} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap bg-gray-50 border-b border-gray-200">
                             {column}
                           </th>
                         ))}
@@ -1255,7 +2200,7 @@ export default function ReportDetailPage() {
                       {filteredData.slice(0, 100).map((row, index) => (
                         <tr key={index} className="hover:bg-gray-50 transition-colors">
                           {Object.values(row).map((value: any, cellIndex: number) => (
-                            <td key={cellIndex} className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
+                            <td key={cellIndex} className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate border-b border-gray-100" title={String(value || '')}>
                               {value !== null && value !== undefined ? String(value) : '-'}
                             </td>
                           ))}

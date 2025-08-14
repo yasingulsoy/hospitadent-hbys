@@ -178,7 +178,7 @@ export default function QueriesPage() {
             </div>
             
             <Link 
-              href="/admin/database"
+              href="/admin/queries/new"
               className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all duration-300 font-semibold flex items-center space-x-2"
             >
               <Plus className="h-5 w-5" />
