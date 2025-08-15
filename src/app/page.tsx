@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Header from './components/Header';
 import { 
   Users, 
   Calendar, 
@@ -92,9 +93,16 @@ export default function Home() {
       if (userStr) {
         const user = JSON.parse(userStr);
         setRole(typeof user?.role === 'number' ? user.role : null);
+      } else {
+        // Kullanıcı giriş yapmamışsa login'e yönlendir
+        window.location.href = '/login';
+        return;
       }
     } catch (error) {
       console.error('Kullanıcı bilgisi yüklenirken hata:', error);
+      // Hata durumunda da login'e yönlendir
+      window.location.href = '/login';
+      return;
     }
     
     // Şube kartlarını yükle
@@ -353,68 +361,8 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
-      {/* Professional Header */}
-      <header className="bg-white shadow-xl border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="py-8">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-6">
-                <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 p-4 rounded-2xl shadow-2xl">
-                  <Building2 className="h-10 w-10 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 via-blue-900 to-purple-900 bg-clip-text text-transparent">
-                    Hospitadent Dental HBYS
-                  </h1>
-                  <p className="text-xl text-gray-600 mt-2 font-medium">Merkezi Yönetim Sistemi</p>
-                  <p className="text-sm text-gray-500 mt-1">Kurumsal Diş Sağlığı Yönetimi Platformu</p>
-                </div>
-              </div>
-              <div className="flex items-center space-x-6">
-                <div className="text-right">
-                  <div className="flex items-center space-x-3">
-                    <div className="bg-green-100 p-2 rounded-full">
-                      <Activity className="h-5 w-5 text-green-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-500">Sistem Durumu</p>
-                      <p className="text-sm font-semibold text-green-600">Aktif</p>
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-400 mt-2">Son güncelleme: {new Date().toLocaleDateString('tr-TR')}</p>
-                </div>
-                
-                {canSeeAdmin && (
-                  <Link 
-                    href="/admin"
-                    className="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition-all duration-300 font-semibold flex items-center space-x-2"
-                  >
-                    <Shield className="h-4 w-4" />
-                    <span>Admin Panel</span>
-                  </Link>
-                )}
-                
-                <button 
-                  onClick={() => {
-                    // LocalStorage ve cookie'leri temizle
-                    localStorage.removeItem('token');
-                    localStorage.removeItem('user');
-                    document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-                    document.cookie = 'user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-                    // Login sayfasına yönlendir
-                    window.location.href = '/login';
-                  }}
-                  className="bg-red-600 text-white px-4 py-2 rounded-xl hover:bg-red-700 transition-all duration-300 font-semibold flex items-center space-x-2"
-                >
-                  <LogOut className="h-4 w-4" />
-                  <span>Çıkış Yap</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
+      <Header />
+      
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Enhanced Stats Cards */}

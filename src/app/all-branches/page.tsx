@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Header from '../components/Header';
 import { 
   Building2, 
   Users, 
@@ -9,8 +10,6 @@ import {
   TrendingUp, 
   CheckCircle, 
   Clock, 
-  LogOut, 
-  Shield,
   ArrowLeft,
   Plus
 } from 'lucide-react';
@@ -29,6 +28,7 @@ interface BranchWithCards {
   status: string;
   lastActivity: string;
   cards: CardData[];
+  growth?: string;
 }
 
 interface CardData {
@@ -44,6 +44,8 @@ interface Branch {
   location?: string;
   status?: string;
   last_activity?: string;
+  manager_name?: string;
+  is_active?: boolean;
 }
 
 export default function AllBranchesPage() {
@@ -57,8 +59,17 @@ export default function AllBranchesPage() {
       if (userStr) {
         const user = JSON.parse(userStr);
         setRole(typeof user?.role === 'number' ? user.role : null);
+      } else {
+        // Kullanıcı giriş yapmamışsa login'e yönlendir
+        window.location.href = '/login';
+        return;
       }
-    } catch {}
+    } catch (error) {
+      console.error('Kullanıcı bilgisi yüklenirken hata:', error);
+      // Hata durumunda da login'e yönlendir
+      window.location.href = '/login';
+      return;
+    }
     
     // Tüm şubeleri yükle
     loadAllBranches();
@@ -113,7 +124,7 @@ export default function AllBranchesPage() {
               id: branch.id,
               name: branch.name,
               code: branch.code,
-              location: branch.province || branch.address || 'Belirtilmemiş',
+              location: branch.location || 'Belirtilmemiş',
               patients: processCardData('Hasta Sayısı', '0'),
               appointments: processCardData('Bugünkü Randevu', '0'),
               revenue: processCardData('Aylık Gelir', '₺0'),
@@ -184,58 +195,31 @@ export default function AllBranchesPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
-      {/* Professional Header */}
-      <header className="bg-white shadow-xl border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="py-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-6">
-                <Link 
-                  href="/"
-                  className="bg-gray-100 p-3 rounded-xl hover:bg-gray-200 transition-colors"
-                >
-                  <ArrowLeft className="h-6 w-6 text-gray-600" />
-                </Link>
-                <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 p-3 rounded-xl">
-                  <Building2 className="h-8 w-8 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold text-gray-900">Tüm Şubeler</h1>
-                  <p className="text-gray-600 mt-1">Tüm şubelerin detaylı görünümü</p>
-                </div>
-              </div>
-              <div className="flex items-center space-x-6">
-                {canSeeAdmin && (
-                  <Link 
-                    href="/admin"
-                    className="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition-all duration-300 font-semibold flex items-center space-x-2"
-                  >
-                    <Shield className="h-4 w-4" />
-                    <span>Admin Panel</span>
-                  </Link>
-                )}
-                
-                <button 
-                  onClick={() => {
-                    localStorage.removeItem('token');
-                    localStorage.removeItem('user');
-                    document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-                    document.cookie = 'user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-                    window.location.href = '/login';
-                  }}
-                  className="bg-red-600 text-white px-4 py-2 rounded-xl hover:bg-red-700 transition-all duration-300 font-semibold flex items-center space-x-2"
-                >
-                  <LogOut className="h-4 w-4" />
-                  <span>Çıkış Yap</span>
-                </button>
-              </div>
+      <Header />
+      
+      {/* Page Header */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center space-x-6">
+            <Link 
+              href="/"
+              className="bg-gray-100 p-3 rounded-xl hover:bg-gray-200 transition-colors"
+            >
+              <ArrowLeft className="h-6 w-6 text-gray-600" />
+            </Link>
+            <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 p-3 rounded-xl">
+              <Building2 className="h-8 w-8 text-white" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Tüm Şubeler</h1>
+              <p className="text-gray-600 mt-1">Tüm şubelerin detaylı görünümü</p>
             </div>
           </div>
         </div>
-      </header>
+      </div>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
         {/* Stats Overview */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 hover:shadow-2xl transition-all duration-300">

@@ -9,7 +9,8 @@ import {
   Trash2, 
   Phone,
   Mail,
-  User
+  User,
+  Eye
 } from 'lucide-react';
 
 // Mock data - gerçek uygulamada API'den gelecek

@@ -19,7 +19,8 @@ import {
   Clock,
   Building2,
   Phone,
-  Mail
+  Mail,
+  X
 } from 'lucide-react';
 
 interface Note {

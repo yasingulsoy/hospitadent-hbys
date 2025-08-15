@@ -14,7 +14,8 @@ import {
   Building2, 
   Edit, 
   Trash2,
-  CheckCircle
+  CheckCircle,
+  X
 } from 'lucide-react';
 
 interface Appointment {

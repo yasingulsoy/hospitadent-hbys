@@ -1,20 +1,5 @@
 const jwt = require('jsonwebtoken');
-
-// Mock user data - gerçek uygulamada veritabanından gelecek
-const mockUsers = {
-  'mock-user-id': {
-    id: 'mock-user-id',
-    email: 'admin@example.com',
-    role: 'SUPER_ADMIN',
-    branchId: 'mock-branch-id',
-    isActive: true,
-    branch: {
-      id: 'mock-branch-id',
-      name: 'Ana Şube'
-    },
-    managedBranch: null
-  }
-};
+const pool = require('../config/database');
 
 // JWT token doğrulama middleware'i
 const authenticateToken = async (req, res, next) => {
@@ -31,17 +16,20 @@ const authenticateToken = async (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret');
     
-    // Mock kullanıcı kontrolü
-    const user = mockUsers[decoded.userId] || mockUsers['mock-user-id'];
+    // Veritabanından kullanıcıyı al
+    const result = await pool.query(
+      'SELECT id, username, email, role, görev_tanımı, is_active, branch_id FROM users WHERE id = $1',
+      [decoded.id]
+    );
 
-    if (!user || !user.isActive) {
+    if (result.rows.length === 0 || !result.rows[0].is_active) {
       return res.status(401).json({
         success: false,
         message: 'Geçersiz veya pasif kullanıcı'
       });
     }
 
-    req.user = user;
+    req.user = result.rows[0];
     next();
   } catch (error) {
     console.error('Auth middleware error:', error);
@@ -82,25 +70,19 @@ const authorizeBranch = (req, res, next) => {
     });
   }
 
-  // Super admin tüm şubelere erişebilir
-  if (req.user.role === 'SUPER_ADMIN') {
+  // Super admin (role 2) tüm şubelere erişebilir
+  if (req.user.role === 2) {
     return next();
   }
 
-  // Branch manager sadece kendi şubesine erişebilir
-  if (req.user.role === 'BRANCH_MANAGER') {
-    const requestedBranchId = req.params.branchId || req.body.branchId;
-    if (req.user.managedBranch?.id !== requestedBranchId) {
-      return res.status(403).json({
-        success: false,
-        message: 'Bu şube için yetkiniz bulunmuyor'
-      });
-    }
+  // Admin (role 1) tüm şubelere erişebilir
+  if (req.user.role === 1) {
+    return next();
   }
 
-  // Diğer kullanıcılar sadece kendi şubelerine erişebilir
-  const requestedBranchId = req.params.branchId || req.body.branchId;
-  if (req.user.branchId !== requestedBranchId) {
+  // Normal kullanıcılar (role 0) sadece kendi şubelerine erişebilir
+  const requestedBranchId = req.params.branchId || req.body.branch_id;
+  if (req.user.branch_id && req.user.branch_id.toString() !== requestedBranchId?.toString()) {
     return res.status(403).json({
       success: false,
       message: 'Bu şube için yetkiniz bulunmuyor'

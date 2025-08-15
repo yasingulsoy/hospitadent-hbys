@@ -116,24 +116,25 @@ router.get('/table-structure', async (req, res) => {
 router.post('/update-admin-password', async (req, res) => {
   try {
     const bcrypt = require('bcryptjs');
+    const { username } = req.body;
     const newPassword = 'admin123';
     const hashedPassword = await bcrypt.hash(newPassword, 12);
     
     const result = await pool.query(
       'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE username = $2 RETURNING id, username, email, role',
-      [hashedPassword, 'admin']
+      [hashedPassword, username]
     );
     
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Admin kullanıcısı bulunamadı'
+        message: 'Kullanıcı bulunamadı'
       });
     }
     
     res.json({
       success: true,
-      message: 'Admin şifresi güncellendi',
+      message: 'Kullanıcı şifresi güncellendi',
       newPassword: newPassword,
       user: result.rows[0]
     });
@@ -520,6 +521,106 @@ router.post('/branch-cards/data', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Şube kartı verileri çekilirken hata oluştu',
+      error: error.message
+    });
+  }
+});
+
+// Activity logs tablosunu kontrol et
+router.get('/check-activity-logs', async (req, res) => {
+  try {
+    // Tablo var mı kontrol et
+    const tableExists = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'activity_logs'
+      )
+    `);
+    
+    if (!tableExists.rows[0].exists) {
+      return res.json({
+        success: false,
+        message: 'activity_logs tablosu bulunamadı',
+        tableExists: false
+      });
+    }
+    
+    // Tablo yapısını kontrol et
+    const columns = await pool.query(`
+      SELECT column_name, data_type, is_nullable
+      FROM information_schema.columns 
+      WHERE table_name = 'activity_logs' 
+      ORDER BY ordinal_position
+    `);
+    
+    // Kayıt sayısını kontrol et
+    const count = await pool.query('SELECT COUNT(*) FROM activity_logs');
+    
+    // Son 5 kaydı getir
+    const recentLogs = await pool.query(`
+      SELECT * FROM activity_logs 
+      ORDER BY created_at DESC 
+      LIMIT 5
+    `);
+    
+    res.json({
+      success: true,
+      message: 'activity_logs tablosu mevcut',
+      tableExists: true,
+      columns: columns.rows,
+      totalRecords: parseInt(count.rows[0].count),
+      recentLogs: recentLogs.rows
+    });
+    
+  } catch (error) {
+    console.error('Activity logs kontrol hatası:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Activity logs kontrol edilirken hata oluştu',
+      error: error.message
+    });
+  }
+});
+
+// Activity logs tablosunu oluştur
+router.post('/create-activity-logs-table', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      CREATE TABLE IF NOT EXISTS activity_logs (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        username VARCHAR(100) NOT NULL,
+        action VARCHAR(100) NOT NULL,
+        details TEXT,
+        ip_address VARCHAR(45),
+        user_agent TEXT,
+        page_url TEXT,
+        http_method VARCHAR(10),
+        request_path TEXT,
+        additional_info JSONB,
+        response_info JSONB,
+        session_duration BIGINT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // İndeksler ekle
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_activity_logs_user_id ON activity_logs(user_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_activity_logs_action ON activity_logs(action)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at ON activity_logs(created_at)');
+    
+    res.json({
+      success: true,
+      message: 'Activity logs tablosu başarıyla oluşturuldu',
+      result: result
+    });
+    
+  } catch (error) {
+    console.error('Activity logs tablosu oluşturma hatası:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Activity logs tablosu oluşturulurken hata oluştu',
       error: error.message
     });
   }

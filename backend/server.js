@@ -17,6 +17,10 @@ app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// Activity Logger Middleware
+const logActivity = require('./src/middleware/activityLogger');
+app.use(logActivity);
+
 // Routes
 app.use('/api/auth', require('./src/routes/auth'));
 app.use('/api/branches', require('./src/routes/branches'));
@@ -28,6 +32,7 @@ app.use('/api/notes', require('./src/routes/notes'));
 app.use('/api/reports', require('./src/routes/reports'));
 app.use('/api/users', require('./src/routes/users'));
 app.use('/api/admin', require('./src/routes/admin'));
+app.use('/api/admin/activity-logs', require('./src/routes/activity-logs'));
 
 // Test database connection
 app.use('/api/test-db', require('./src/routes/test-db'));
