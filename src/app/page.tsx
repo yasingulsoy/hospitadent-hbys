@@ -26,6 +26,7 @@ import {
   XCircle
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { apiGet } from '../lib/api';
 
 // Tip tanımlamaları
 interface BranchCard {
@@ -127,7 +128,7 @@ export default function Home() {
   const checkDatabaseConnection = async () => {
     setCheckingDbStatus(true);
     try {
-      const response = await fetch('http://localhost:5000/api/admin/database-connections');
+      const response = await apiGet('http://localhost:5000/api/admin/database-connections');
       const data = await response.json();
       
       if (data.success && data.connections && data.connections.length > 0) {
@@ -168,7 +169,7 @@ export default function Home() {
   const loadSavedQueries = async () => {
     try {
       setQueriesLoading(true);
-      const response = await fetch('http://localhost:5000/api/admin/database/save-query');
+      const response = await apiGet('http://localhost:5000/api/admin/database/save-query');
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
@@ -280,7 +281,7 @@ export default function Home() {
   const loadRealBranches = async () => {
     try {
       setBranchesLoading(true);
-      const response = await fetch('http://localhost:5000/api/branches');
+      const response = await apiGet('http://localhost:5000/api/branches');
       if (response.ok) {
         const data = await response.json();
         if (data.success) {

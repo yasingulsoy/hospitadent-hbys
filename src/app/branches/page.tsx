@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { apiGet, apiPut, apiDelete } from '../../lib/api';
 import { 
   Search, 
   Plus, 
@@ -61,7 +62,7 @@ export default function BranchesPage() {
 
   const loadBranches = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/branches');
+      const response = await apiGet('http://localhost:5000/api/branches');
       const data = await response.json();
       
       if (data.success) {
@@ -76,7 +77,7 @@ export default function BranchesPage() {
 
   const loadUsers = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/users');
+      const response = await apiGet('http://localhost:5000/api/users');
       const data = await response.json();
       
       if (data.success) {
@@ -100,13 +101,7 @@ export default function BranchesPage() {
       console.log('Manager ID:', editingBranch.manager_id); // Debug için
       console.log('Manager Name:', editingBranch.manager_name); // Debug için
       
-      const response = await fetch(`http://localhost:5000/api/branches/${editingBranch.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(editingBranch),
-      });
+      const response = await apiPut(`http://localhost:5000/api/branches/${editingBranch.id}`, editingBranch);
 
       const data = await response.json();
       console.log('Backend yanıtı:', data); // Debug için
@@ -130,9 +125,7 @@ export default function BranchesPage() {
     if (!confirm('Bu şubeyi silmek istediğinizden emin misiniz?')) return;
 
     try {
-      const response = await fetch(`http://localhost:5000/api/branches/${id}`, {
-        method: 'DELETE',
-      });
+      const response = await apiDelete(`http://localhost:5000/api/branches/${id}`);
 
       if (response.ok) {
         await loadBranches(); // Şubeleri yeniden yükle

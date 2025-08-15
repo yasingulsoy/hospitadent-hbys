@@ -7,35 +7,59 @@ const authenticateToken = async (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
+    console.log('🔍 Auth Middleware:', {
+      hasAuthHeader: !!authHeader,
+      tokenLength: token ? token.length : 0,
+      tokenStart: token ? token.substring(0, 20) + '...' : 'none'
+    });
+
     if (!token) {
+      console.log('❌ Token bulunamadı');
       return res.status(401).json({
         success: false,
         message: 'Erişim token\'ı gerekli'
       });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret');
-    
-    // Veritabanından kullanıcıyı al
-    const result = await pool.query(
-      'SELECT id, username, email, role, görev_tanımı, is_active, branch_id FROM users WHERE id = $1',
-      [decoded.id]
-    );
+    try {
+      // JWT token'ı doğrula
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret');
+      console.log('✅ JWT decoded:', decoded);
+      
+      // Veritabanından kullanıcıyı al
+      const result = await pool.query(
+        'SELECT id, username, email, role, görev_tanımı, is_active, branch_id FROM users WHERE id = $1',
+        [decoded.id]
+      );
 
-    if (result.rows.length === 0 || !result.rows[0].is_active) {
-      return res.status(401).json({
+      if (result.rows.length === 0 || !result.rows[0].is_active) {
+        console.log('❌ Kullanıcı bulunamadı veya aktif değil');
+        return res.status(401).json({
+          success: false,
+          message: 'Geçersiz kullanıcı'
+        });
+      }
+
+      // Kullanıcı bilgisini request'e ekle
+      req.user = result.rows[0];
+      console.log('✅ Kullanıcı doğrulandı:', req.user.username);
+      
+      next();
+    } catch (jwtError) {
+      console.error('❌ JWT doğrulama hatası:', jwtError.message);
+      return res.status(403).json({
         success: false,
-        message: 'Geçersiz veya pasif kullanıcı'
+        message: 'Geçersiz token',
+        error: jwtError.message
       });
     }
 
-    req.user = result.rows[0];
-    next();
   } catch (error) {
-    console.error('Auth middleware error:', error);
-    return res.status(403).json({
+    console.error('❌ Auth middleware hatası:', error);
+    return res.status(500).json({
       success: false,
-      message: 'Geçersiz token'
+      message: 'Kimlik doğrulama hatası',
+      error: error.message
     });
   }
 };

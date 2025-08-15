@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { apiGet, apiPost } from '../../lib/api';
 import { 
   ArrowLeft, 
   Save, 
@@ -48,7 +49,7 @@ export default function NewBranchPage() {
 
   const loadUsers = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/users');
+      const response = await apiGet('http://localhost:5000/api/users');
       const data = await response.json();
       
       if (data.success) {
@@ -112,15 +113,9 @@ export default function NewBranchPage() {
     try {
       console.log('Gönderilecek veri:', formData); // Debug için
       
-      const response = await fetch('http://localhost:5000/api/branches', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...formData,
-          manager_id: formData.manager_id || null
-        }),
+      const response = await apiPost('http://localhost:5000/api/branches', {
+        ...formData,
+        manager_id: formData.manager_id || null
       });
 
       const data = await response.json();

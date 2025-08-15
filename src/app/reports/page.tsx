@@ -21,7 +21,10 @@ import {
   Clock,
   Tag,
   Star,
-  Zap
+  Zap,
+  BarChart,
+  PieChart,
+  LineChart
 } from 'lucide-react';
 
 interface SavedQuery {
@@ -35,15 +38,40 @@ interface SavedQuery {
   created_at: string;
 }
 
+interface AxisOption {
+  value: string;
+  label: string;
+  type: string;
+  table?: string;
+  sourceField?: string;
+  sourceTable?: string;
+}
+
+interface AxisOptions {
+  xAxis: AxisOption[];
+  yAxis: AxisOption[];
+}
+
 export default function ReportsPage() {
   const [queries, setQueries] = useState<SavedQuery[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Tüm Kategoriler');
   const [sortBy, setSortBy] = useState<'date' | 'name' | 'category'>('date');
+  
+  // Dinamik grafik ayarları
+  const [showAdvancedChart, setShowAdvancedChart] = useState(false);
+  const [axisOptions, setAxisOptions] = useState<AxisOptions>({ xAxis: [], yAxis: [] });
+  const [selectedXAxis, setSelectedXAxis] = useState<AxisOption | null>(null);
+  const [selectedYAxis, setSelectedYAxis] = useState<AxisOption | null>(null);
+  const [sorting, setSorting] = useState<'asc' | 'desc'>('desc');
+  const [aggregationMethod, setAggregationMethod] = useState<'sum' | 'count' | 'avg'>('sum');
+  const [chartData, setChartData] = useState<any[]>([]);
+  const [chartLoading, setChartLoading] = useState(false);
 
   useEffect(() => {
     loadSavedQueries();
+    loadAxisOptions();
   }, []);
 
   const loadSavedQueries = async () => {
@@ -58,6 +86,104 @@ export default function ReportsPage() {
       console.error('Raporlar yüklenirken hata:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Eksen seçeneklerini backend'den yükle
+  const loadAxisOptions = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        console.error('❌ Token bulunamadı');
+        alert('Lütfen önce giriş yapın');
+        return;
+      }
+
+      console.log('🔍 Token bulundu:', token.substring(0, 20) + '...');
+      
+      const response = await fetch('http://localhost:5000/api/reports/axis-options', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('❌ API hatası:', errorData);
+        throw new Error(errorData.message || 'API hatası');
+      }
+      
+      const data = await response.json();
+      if (data.success) {
+        setAxisOptions(data.data);
+        console.log('📊 Eksen seçenekleri yüklendi:', data.data);
+      } else {
+        throw new Error(data.message || 'Veri yüklenemedi');
+      }
+    } catch (error: any) {
+      console.error('❌ Eksen seçenekleri yüklenirken hata:', error);
+      alert(`Eksen seçenekleri yüklenemedi: ${error.message}`);
+    }
+  };
+
+  // Dinamik grafik oluştur
+  const createDynamicChart = async () => {
+    if (!selectedXAxis || !selectedYAxis) {
+      alert('Lütfen X ve Y eksenlerini seçin');
+      return;
+    }
+
+    setChartLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        alert('Lütfen önce giriş yapın');
+        return;
+      }
+
+      console.log('🔍 Grafik oluşturuluyor:', {
+        xAxis: selectedXAxis,
+        yAxis: selectedYAxis,
+        aggregationMethod,
+        sorting
+      });
+
+      const response = await fetch('http://localhost:5000/api/reports/dynamic-chart', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          xAxis: selectedXAxis,
+          yAxis: selectedYAxis,
+          aggregationMethod,
+          sorting,
+          filters: {}
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('❌ Grafik API hatası:', errorData);
+        throw new Error(errorData.message || 'Grafik oluşturulamadı');
+      }
+      
+      const data = await response.json();
+      if (data.success) {
+        setChartData(data.data.chartData);
+        console.log('📊 Grafik verisi oluşturuldu:', data.data);
+      } else {
+        throw new Error(data.message || 'Grafik verisi alınamadı');
+      }
+    } catch (error: any) {
+      console.error('❌ Grafik oluşturulurken hata:', error);
+      alert(`Grafik oluşturulamadı: ${error.message}`);
+    } finally {
+      setChartLoading(false);
     }
   };
 
@@ -212,21 +338,150 @@ export default function ReportsPage() {
               </div>
             </div>
           </div>
-          
+
           <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Aktif</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {queries.filter(q => q.is_public).length}
-                </p>
+                <p className="text-sm font-medium text-gray-600">Dinamik Grafik</p>
+                <button
+                  onClick={() => setShowAdvancedChart(!showAdvancedChart)}
+                  className="text-lg font-bold text-blue-600 hover:text-blue-800 transition-colors"
+                >
+                  {showAdvancedChart ? 'Gizle' : 'Göster'}
+                </button>
               </div>
               <div className="bg-orange-100 p-3 rounded-lg">
-                <Star className="h-6 w-6 text-orange-600" />
+                <BarChart className="h-6 w-6 text-orange-600" />
               </div>
             </div>
           </div>
         </div>
+
+        {/* Dinamik Grafik Ayarları */}
+        {showAdvancedChart && (
+          <div className="bg-white rounded-2xl shadow-xl p-8 mb-8 border border-gray-100">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="bg-gradient-to-r from-orange-500 to-red-500 p-3 rounded-xl shadow-lg">
+                <BarChart className="h-8 w-8 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Gelişmiş Grafik Ayarları</h2>
+                <p className="text-gray-600">X ve Y eksenlerinde tüm veri türlerini kullanarak dinamik grafik oluşturun</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* X Ekseni (Kategori/Tarih) */}
+              <div className="space-y-3">
+                <label className="block text-sm font-semibold text-gray-700">
+                  X Ekseni (Kategori/Tarih)
+                </label>
+                <select
+                  value={selectedXAxis?.value || ''}
+                  onChange={(e) => {
+                    const selected = axisOptions.xAxis.find(opt => opt.value === e.target.value);
+                    setSelectedXAxis(selected || null);
+                  }}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
+                >
+                  <option value="">X Ekseni Seçin</option>
+                  {axisOptions.xAxis.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label} ({option.type})
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={sorting}
+                  onChange={(e) => setSorting(e.target.value as 'asc' | 'desc')}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
+                >
+                  <option value="desc">Azalan (Büyükten Küçüğe)</option>
+                  <option value="asc">Artan (Küçükten Büyüğe)</option>
+                </select>
+              </div>
+
+              {/* Y Ekseni (Sayısal Değer) */}
+              <div className="space-y-3">
+                <label className="block text-sm font-semibold text-gray-700">
+                  Y Ekseni (Sayısal Değer)
+                </label>
+                <select
+                  value={selectedYAxis?.value || ''}
+                  onChange={(e) => {
+                    const selected = axisOptions.yAxis.find(opt => opt.value === e.target.value);
+                    setSelectedYAxis(selected || null);
+                  }}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
+                >
+                  <option value="">Y Ekseni Seçin</option>
+                  {axisOptions.yAxis.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label} ({option.type})
+                    </option>
+                  ))}
+                </select>
+
+                <div className="flex items-center gap-2">
+                  <BarChart className="h-5 w-5 text-blue-600" />
+                  <span className="text-sm text-gray-600">Bar Grafik</span>
+                </div>
+              </div>
+
+              {/* Toplama Yöntemi */}
+              <div className="space-y-3">
+                <label className="block text-sm font-semibold text-gray-700">
+                  Toplama Yöntemi
+                </label>
+                <select
+                  value={aggregationMethod}
+                  onChange={(e) => setAggregationMethod(e.target.value as 'sum' | 'count' | 'avg')}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
+                >
+                  <option value="sum">Toplam</option>
+                  <option value="count">Sayı</option>
+                  <option value="avg">Ortalama</option>
+                </select>
+
+                <button
+                  onClick={createDynamicChart}
+                  disabled={!selectedXAxis || !selectedYAxis || chartLoading}
+                  className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-3 rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-300 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                >
+                  {chartLoading ? (
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  ) : (
+                    <>
+                      <BarChart className="h-5 w-5" />
+                      Grafiği Uygula
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Grafik Sonucu */}
+            {chartData.length > 0 && (
+              <div className="mt-8 p-6 bg-gray-50 rounded-xl">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Grafik Sonucu</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {chartData.slice(0, 6).map((item, index) => (
+                    <div key={index} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                      <div className="text-sm text-gray-600">{item.label}</div>
+                      <div className="text-2xl font-bold text-blue-600">{item.value}</div>
+                    </div>
+                  ))}
+                </div>
+                {chartData.length > 6 && (
+                  <div className="mt-4 text-center text-gray-600">
+                    +{chartData.length - 6} daha...
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Arama ve Filtreler */}
         <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-100">
