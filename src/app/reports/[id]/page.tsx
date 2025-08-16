@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { apiGet, apiPost } from '../../../lib/api';
 import { 
   BarChart3, 
   ArrowLeft, 
@@ -702,7 +703,7 @@ export default function ReportDetailPage() {
 
   const loadSavedQuery = async (id: string) => {
     try {
-      const response = await fetch('http://localhost:5000/api/admin/database/save-query');
+      const response = await apiGet('http://localhost:5000/api/admin/database/save-query');
       const data = await response.json();
       
       if (data.success) {
@@ -727,7 +728,7 @@ export default function ReportDetailPage() {
     
     try {
       setLoadingConnection(true);
-      const connectionResponse = await fetch('http://localhost:5000/api/admin/database-connections');
+      const connectionResponse = await apiGet('http://localhost:5000/api/admin/database-connections');
       const connectionData = await connectionResponse.json();
       
       if (!connectionData.success || connectionData.connections.length === 0) {
@@ -740,17 +741,13 @@ export default function ReportDetailPage() {
       const connection = connectionData.connections[0];
       setLoadingConnection(false);
       
-      const response = await fetch('http://localhost:5000/api/admin/database/query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: query.sql_query,
-          host: connection.host,
-          port: parseInt(connection.port),
-          database: connection.database_name,
-          username: connection.username,
-          password: connection.password
-        }),
+      const response = await apiPost('http://localhost:5000/api/admin/database/query', {
+        query: query.sql_query,
+        host: connection.host,
+        port: parseInt(connection.port),
+        database: connection.database_name,
+        username: connection.username,
+        password: connection.password
       });
 
       const data: QueryResult = await response.json();

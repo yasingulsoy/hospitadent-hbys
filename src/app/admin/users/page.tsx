@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { apiGet, apiPost, apiPut, apiDelete } from '../../../lib/api';
 import { Plus, Edit, Trash2, Search, User, Shield } from 'lucide-react';
 
 interface User {
@@ -73,7 +74,7 @@ export default function UsersPage() {
   // Şubeleri getir
   const fetchBranches = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/users/branches/all');
+      const response = await apiGet('http://localhost:5000/api/users/branches/all');
       const data = await response.json();
       
       if (data.success) {
@@ -88,7 +89,7 @@ export default function UsersPage() {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:5000/api/users');
+      const response = await apiGet('http://localhost:5000/api/users');
       const data = await response.json();
       
       if (data.success) {
@@ -127,13 +128,7 @@ export default function UsersPage() {
 
       console.log('Sending User Data:', userData);
 
-      const response = await fetch('http://localhost:5000/api/users', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(userData),
-      });
+      const response = await apiPost('http://localhost:5000/api/users', userData);
 
       console.log('Response Status:', response.status);
       const data = await response.json();
@@ -142,16 +137,9 @@ export default function UsersPage() {
       if (data.success) {
         // Activity log ekle
         try {
-          await fetch('http://localhost:5000/api/admin/activity-logs', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('token')}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              action: 'USER_CREATE',
-              details: `Yeni kullanıcı eklendi: ${formData.name} ${formData.surname} (${formData.username})`
-            }),
+          await apiPost('http://localhost:5000/api/admin/activity-logs', {
+            action: 'USER_CREATE',
+            details: `Yeni kullanıcı eklendi: ${formData.name} ${formData.surname} (${formData.username})`
           });
         } catch (logError) {
           console.error('Activity log hatası:', logError);
@@ -200,32 +188,16 @@ export default function UsersPage() {
         is_active: formData.is_active
       };
 
-      const response = await fetch(`http://localhost:5000/api/users/${selectedUser.id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...userData
-        }),
-      });
+      const response = await apiPut(`http://localhost:5000/api/users/${selectedUser.id}`, userData);
 
       const data = await response.json();
       
       if (data.success) {
         // Activity log ekle
         try {
-          await fetch('http://localhost:5000/api/admin/activity-logs', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('token')}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              action: 'USER_UPDATE',
-              details: `Kullanıcı güncellendi: ${formData.name} ${formData.surname} (${formData.username})`
-            }),
+          await apiPost('http://localhost:5000/api/admin/activity-logs', {
+            action: 'USER_UPDATE',
+            details: `Kullanıcı güncellendi: ${formData.name} ${formData.surname} (${formData.username})`
           });
         } catch (logError) {
           console.error('Activity log hatası:', logError);
@@ -245,13 +217,7 @@ export default function UsersPage() {
     if (!confirm('Bu kullanıcıyı silmek istediğinizden emin misiniz?')) return;
 
     try {
-      const response = await fetch(`http://localhost:5000/api/users/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json',
-        }
-      });
+      const response = await apiDelete(`http://localhost:5000/api/users/${id}`);
 
       const data = await response.json();
       
@@ -260,16 +226,9 @@ export default function UsersPage() {
         try {
           const userToDelete = users.find(u => u.id === id);
           if (userToDelete) {
-            await fetch('http://localhost:5000/api/admin/activity-logs', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                action: 'USER_DELETE',
-                details: `Kullanıcı silindi: ${userToDelete.name || ''} ${userToDelete.surname || ''} (${userToDelete.username})`
-              }),
+            await apiPost('http://localhost:5000/api/admin/activity-logs', {
+              action: 'USER_DELETE',
+              details: `Kullanıcı silindi: ${userToDelete.name || ''} ${userToDelete.surname || ''} (${userToDelete.username})`
             });
           }
         } catch (logError) {

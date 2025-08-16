@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { apiGet, apiPost, apiPut, apiDelete } from '../../../lib/api';
 import { Plus, Edit, Trash2, Search } from 'lucide-react';
 import Link from 'next/link';
 
@@ -47,7 +48,7 @@ export default function BranchesPage() {
   const fetchBranches = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:5000/api/branches');
+      const response = await apiGet('http://localhost:5000/api/branches');
       const data = await response.json();
       
       if (data.success) {
@@ -64,13 +65,7 @@ export default function BranchesPage() {
   const handleAddBranch = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await fetch('http://localhost:5000/api/branches', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
+      const response = await apiPost('http://localhost:5000/api/branches', formData);
 
       const data = await response.json();
       
@@ -101,13 +96,7 @@ export default function BranchesPage() {
     if (!selectedBranch) return;
 
     try {
-      const response = await fetch(`http://localhost:5000/api/branches/${selectedBranch.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
+      const response = await apiPut(`http://localhost:5000/api/branches/${selectedBranch.id}`, formData);
 
       const data = await response.json();
       
@@ -126,9 +115,7 @@ export default function BranchesPage() {
     if (!confirm('Bu şubeyi silmek istediğinizden emin misiniz?')) return;
 
     try {
-      const response = await fetch(`http://localhost:5000/api/branches/${id}`, {
-        method: 'DELETE',
-      });
+      const response = await apiDelete(`http://localhost:5000/api/branches/${id}`);
 
       const data = await response.json();
       

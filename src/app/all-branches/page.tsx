@@ -14,6 +14,7 @@ import {
   Plus
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { apiGet, apiPost } from '../../lib/api';
 
 // Tip tanımlamaları
 interface BranchWithCards {
@@ -83,7 +84,7 @@ export default function AllBranchesPage() {
       setLoading(true);
       
       // PostgreSQL'den tüm şubeleri al
-      const branchesResponse = await fetch('http://localhost:5000/api/branches');
+      const branchesResponse = await apiGet('http://localhost:5000/api/branches');
       if (!branchesResponse.ok) {
         throw new Error('Şubeler yüklenemedi');
       }
@@ -97,11 +98,7 @@ export default function AllBranchesPage() {
       const branchesWithCards = await Promise.all(
         branchesData.data.map(async (branch: Branch) => {
           try {
-            const response = await fetch('http://localhost:5000/api/branch-cards/execute-cards', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ branch_id: branch.id })
-            });
+            const response = await apiPost('http://localhost:5000/api/branch-cards/execute-cards', { branch_id: branch.id });
             
             let cards = [];
             if (response.ok) {

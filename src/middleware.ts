@@ -17,27 +17,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Admin paneli erişim kontrolü - daha sıkı
+  // Admin paneli erişim kontrolü - backend'de yapılacak
   if (pathname.startsWith('/admin')) {
-    try {
-      const userStr = request.cookies.get('user')?.value;
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        // Sadece role 1 veya 2 olan kullanıcılar admin paneline erişebilir
-        if (user.role === 1 || user.role === 2) {
-          return NextResponse.next();
-        } else {
-          // Yetkisiz erişim - login'e yönlendir
-          return NextResponse.redirect(new URL('/login', request.url));
-        }
-      } else {
-        // User bilgisi yok - login'e yönlendir
-        return NextResponse.redirect(new URL('/login', request.url));
-      }
-    } catch {
-      // Parse hatası - login'e yönlendir
-      return NextResponse.redirect(new URL('/login', request.url));
-    }
+    // Admin yetkisi backend'de kontrol edilecek
+    // Burada sadece token varlığını kontrol et
+    return NextResponse.next();
   }
 
   // Diğer tüm sayfalar için token kontrolü yeterli

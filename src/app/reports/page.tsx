@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { apiGet, apiPost } from '../../lib/api';
 import Link from 'next/link';
 import { 
   Plus, 
@@ -76,7 +77,7 @@ export default function ReportsPage() {
 
   const loadSavedQueries = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/admin/database/save-query');
+      const response = await apiGet('http://localhost:5000/api/admin/database/save-query');
       const data = await response.json();
       
       if (data.success) {
@@ -92,22 +93,7 @@ export default function ReportsPage() {
   // Eksen seçeneklerini backend'den yükle
   const loadAxisOptions = async () => {
     try {
-      const token = localStorage.getItem('token');
-      
-      if (!token) {
-        console.error('❌ Token bulunamadı');
-        alert('Lütfen önce giriş yapın');
-        return;
-      }
-
-      console.log('🔍 Token bulundu:', token.substring(0, 20) + '...');
-      
-      const response = await fetch('http://localhost:5000/api/reports/axis-options', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        }
-      });
+      const response = await apiGet('http://localhost:5000/api/reports/axis-options');
       
       if (!response.ok) {
         const errorData = await response.json();
@@ -151,19 +137,12 @@ export default function ReportsPage() {
         sorting
       });
 
-      const response = await fetch('http://localhost:5000/api/reports/dynamic-chart', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          xAxis: selectedXAxis,
-          yAxis: selectedYAxis,
-          aggregationMethod,
-          sorting,
-          filters: {}
-        })
+      const response = await apiPost('http://localhost:5000/api/reports/dynamic-chart', {
+        xAxis: selectedXAxis,
+        yAxis: selectedYAxis,
+        aggregationMethod,
+        sorting,
+        filters: {}
       });
 
       if (!response.ok) {

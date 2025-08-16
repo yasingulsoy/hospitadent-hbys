@@ -10,10 +10,12 @@ const logActivity = async (req, res, next) => {
   
   // Frontend'den gelen Authorization header'ı kontrol et
   const authHeader = req.headers['authorization'];
-  if (authHeader && authHeader.startsWith('Bearer ')) {
+  const bearerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
+  const cookieToken = req.cookies?.token;
+  const token = bearerToken || cookieToken;
+  if (token) {
     try {
       // JWT token'dan kullanıcı bilgisini çıkar
-      const token = authHeader.substring(7);
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
       currentUser = {
         id: decoded.id,

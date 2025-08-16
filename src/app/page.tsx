@@ -89,37 +89,63 @@ export default function Home() {
   const [checkingDbStatus, setCheckingDbStatus] = useState(false);
 
   useEffect(() => {
-    try {
-      const userStr = localStorage.getItem('user') || '';
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        setRole(typeof user?.role === 'number' ? user.role : null);
-      } else {
-        // Kullanıcı giriş yapmamışsa login'e yönlendir
+    const checkAuth = async () => {
+      try {
+        const userStr = localStorage.getItem('user') || '';
+        
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          setRole(typeof user?.role === 'number' ? user.role : null);
+          
+          // Token geçerliliğini backend'den kontrol et (cookie otomatik gönderilir)
+          try {
+            const response = await fetch('http://localhost:5000/api/auth/profile', {
+              credentials: 'include' // Cookie'leri otomatik gönder
+            });
+            
+            if (!response.ok) {
+              // Token geçersiz, login'e yönlendir
+              localStorage.removeItem('user');
+              window.location.href = '/login';
+              return;
+            }
+          } catch (error) {
+            console.error('Token kontrol hatası:', error);
+            // Hata durumunda da login'e yönlendir
+            localStorage.removeItem('user');
+            window.location.href = '/login';
+            return;
+          }
+        } else {
+          // Kullanıcı giriş yapmamışsa login'e yönlendir
+          window.location.href = '/login';
+          return;
+        }
+      } catch (error) {
+        console.error('Kullanıcı bilgisi yüklenirken hata:', error);
+        // Hata durumunda da login'e yönlendir
+        localStorage.removeItem('user');
         window.location.href = '/login';
         return;
       }
-    } catch (error) {
-      console.error('Kullanıcı bilgisi yüklenirken hata:', error);
-      // Hata durumunda da login'e yönlendir
-      window.location.href = '/login';
-      return;
-    }
+      
+      // Şube kartlarını yükle
+      loadBranchCards().catch(error => {
+        console.error('Şube kartları yüklenirken hata:', error);
+      });
+
+      // Kayıtlı sorguları yükle
+      loadSavedQueries().catch(error => {
+        console.error('Kayıtlı sorgular yüklenirken hata:', error);
+      });
+
+      // Veritabanı bağlantı durumunu kontrol et
+      checkDatabaseConnection().catch(error => {
+        console.error('Veritabanı bağlantı durumu kontrol edilirken hata:', error);
+      });
+    };
     
-    // Şube kartlarını yükle
-    loadBranchCards().catch(error => {
-      console.error('Şube kartları yüklenirken hata:', error);
-    });
-
-    // Kayıtlı sorguları yükle
-    loadSavedQueries().catch(error => {
-      console.error('Kayıtlı sorgular yüklenirken hata:', error);
-    });
-
-    // Veritabanı bağlantı durumunu kontrol et
-    checkDatabaseConnection().catch(error => {
-      console.error('Veritabanı bağlantı durumu kontrol edilirken hata:', error);
-    });
+    checkAuth();
   }, []);
 
   const canSeeAdmin = role === 1 || role === 2;

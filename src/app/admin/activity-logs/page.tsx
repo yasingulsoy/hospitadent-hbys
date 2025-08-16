@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
+import { apiGet } from '../../../lib/api';
 import { 
   ArrowLeft, 
   Users, 
@@ -53,7 +54,7 @@ export default function ActivityLogs() {
       setLoading(true);
       
       // API'den aktivite loglarını yükle
-      const response = await fetch('http://localhost:5000/api/admin/activity-logs');
+      const response = await apiGet('http://localhost:5000/api/admin/activity-logs');
       if (response.ok) {
         const data = await response.json();
         if (data.success) {

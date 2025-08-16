@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { apiGet } from '../../lib/api';
 import { useState, useEffect } from 'react';
 import { 
   Building2, 
@@ -35,7 +36,7 @@ export default function AdminPanel() {
       setLoading(true);
       
       // Şubeleri yükle
-      const branchesResponse = await fetch('http://localhost:5000/api/branches');
+      const branchesResponse = await apiGet('http://localhost:5000/api/branches');
       if (branchesResponse.ok) {
         const branchesData = await branchesResponse.json();
         if (branchesData.success) {
@@ -44,7 +45,7 @@ export default function AdminPanel() {
       }
 
       // Kaydedilen sorguları yükle
-      const queriesResponse = await fetch('http://localhost:5000/api/admin/database/save-query');
+      const queriesResponse = await apiGet('http://localhost:5000/api/admin/database/save-query');
       if (queriesResponse.ok) {
         const queriesData = await queriesResponse.json();
         if (queriesData.success) {
@@ -54,7 +55,7 @@ export default function AdminPanel() {
 
       // Aktif kullanıcıları yükle (şu anda giriş yapmış olanlar)
       try {
-        const usersResponse = await fetch('http://localhost:5000/api/admin/users');
+        const usersResponse = await apiGet('http://localhost:5000/api/admin/users');
         if (usersResponse.ok) {
           const usersData = await usersResponse.json();
           if (usersData.success) {
@@ -76,7 +77,7 @@ export default function AdminPanel() {
 
       // Son aktiviteyi yükle (veritabanından)
       try {
-        const activityResponse = await fetch('http://localhost:5000/api/admin/activity-logs?limit=1');
+        const activityResponse = await apiGet('http://localhost:5000/api/admin/activity-logs?limit=1');
         if (activityResponse.ok) {
           const activityData = await activityResponse.json();
           if (activityData.success && activityData.logs && activityData.logs.length > 0) {

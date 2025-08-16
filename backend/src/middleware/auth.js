@@ -4,11 +4,18 @@ const pool = require('../config/database');
 // JWT token doğrulama middleware'i
 const authenticateToken = async (req, res, next) => {
   try {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+    // Öncelikle HttpOnly cookie'den token'ı al
+    let token = req.cookies?.token;
+    
+    // Eğer cookie'de yoksa, Authorization header'dan al (fallback)
+    if (!token) {
+      const authHeader = req.headers['authorization'];
+      token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+    }
 
     console.log('🔍 Auth Middleware:', {
-      hasAuthHeader: !!authHeader,
+      hasCookieToken: !!req.cookies?.token,
+      hasAuthHeader: !!req.headers['authorization'],
       tokenLength: token ? token.length : 0,
       tokenStart: token ? token.substring(0, 20) + '...' : 'none'
     });
@@ -23,7 +30,7 @@ const authenticateToken = async (req, res, next) => {
 
     try {
       // JWT token'ı doğrula
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret');
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
       console.log('✅ JWT decoded:', decoded);
       
       // Veritabanından kullanıcıyı al

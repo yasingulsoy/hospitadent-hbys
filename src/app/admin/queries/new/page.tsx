@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { apiPost } from '../../../../lib/api';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
@@ -99,17 +100,13 @@ export default function NewQueryPage() {
     setLoading(true);
     
     try {
-      const response = await fetch('http://localhost:5000/api/admin/database/save-query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: form.name,
-          description: form.description,
-          category: form.category,
-          sql_query: form.sql_query,
-          is_public: form.is_public,
-          tags: form.tags
-        })
+      const response = await apiPost('http://localhost:5000/api/admin/database/save-query', {
+        name: form.name,
+        description: form.description,
+        category: form.category,
+        sql_query: form.sql_query,
+        is_public: form.is_public,
+        tags: form.tags
       });
 
       if (response.ok) {

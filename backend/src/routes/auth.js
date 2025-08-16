@@ -108,6 +108,15 @@ router.post('/login', async (req, res) => {
       { expiresIn: '24h' }
     );
 
+    // HttpOnly cookie olarak token ayarla
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      maxAge: 24 * 60 * 60 * 1000, // 24 saat
+      path: '/'
+    });
+
     // Şifreyi response'dan çıkar
     const { password_hash: _, ...userWithoutPassword } = user;
 
@@ -131,18 +140,19 @@ router.post('/login', async (req, res) => {
 // Kullanıcı profilini getir
 router.get('/profile', async (req, res) => {
   try {
-    // Token'dan user ID'yi al (basit implementasyon)
+    // Önce HttpOnly cookie'den al, yoksa Authorization header'dan al
+    const cookieToken = req.cookies?.token;
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const headerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
+    const token = cookieToken || headerToken;
+
+    if (!token) {
       return res.status(401).json({
         success: false,
         message: 'Token gerekli'
       });
     }
 
-    const token = authHeader.substring(7);
-    
-    // JWT decode (basit implementasyon - production'da daha güvenli olmalı)
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
       
@@ -253,6 +263,7 @@ router.put('/change-password', async (req, res) => {
 
 // Çıkış yap
 router.post('/logout', (req, res) => {
+  res.clearCookie('token');
   res.json({
     success: true,
     message: 'Başarıyla çıkış yapıldı'

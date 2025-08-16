@@ -43,6 +43,7 @@ export default function LoginPage() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify(formData),
       });
 
@@ -54,13 +55,10 @@ export default function LoginPage() {
         console.log('Giriş başarılı, kullanıcı:', data.user);
         console.log('Kullanıcı rolü:', data.user.role);
         
-        // Token'ı localStorage ve cookie'ye kaydet
-        localStorage.setItem('token', data.token);
+        // Sadece kullanıcı bilgilerini localStorage'a kaydet (token yok)
         localStorage.setItem('user', JSON.stringify(data.user));
         
-        // Cookie'ye de kaydet (middleware için)
-        document.cookie = `token=${data.token}; path=/; max-age=86400`;
-        document.cookie = `user=${JSON.stringify(data.user)}; path=/; max-age=86400`;
+        // Token zaten HttpOnly cookie olarak backend tarafından set ediliyor
 
         // Giriş sonrası ana sayfaya yönlendir (role bağımsız)
         try {

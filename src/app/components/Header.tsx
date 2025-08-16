@@ -47,12 +47,23 @@ export default function Header() {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
-    setIsLoggedIn(false);
-    setUserName('Kullanıcı');
-    window.location.href = '/login';
+  const handleLogout = async () => {
+    try {
+      // Backend'e logout isteği gönder
+      await fetch('http://localhost:5000/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch (error) {
+      console.error('Logout hatası:', error);
+    } finally {
+      // Local storage'dan sadece user bilgisini temizle
+      localStorage.removeItem('user');
+      setIsLoggedIn(false);
+      setUserName('Kullanıcı');
+      // Login sayfasına yönlendir
+      window.location.href = '/login';
+    }
   };
 
   return (

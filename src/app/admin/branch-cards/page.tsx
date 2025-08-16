@@ -18,6 +18,7 @@ import {
   Database
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { apiGet, apiPost, apiPut, apiDelete } from '../../../lib/api';
 
 // Tip tanımlamaları
 interface BranchCard {
@@ -71,7 +72,7 @@ export default function BranchCardsManagement() {
     try {
       setLoading(true);
       
-      const response = await fetch('http://localhost:5000/api/branch-cards');
+      const response = await apiGet('http://localhost:5000/api/branch-cards');
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
@@ -88,7 +89,7 @@ export default function BranchCardsManagement() {
   // Şubeleri yükle
   const loadBranches = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/branches');
+      const response = await apiGet('http://localhost:5000/api/branches');
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
@@ -109,11 +110,7 @@ export default function BranchCardsManagement() {
 
     setTestingQuery(true);
     try {
-      const response = await fetch('http://localhost:5000/api/branch-cards/test-query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sql_query: sqlQuery, branch_id: branchId })
-      });
+      const response = await apiPost('http://localhost:5000/api/branch-cards/test-query', { sql_query: sqlQuery, branch_id: branchId });
 
       const data = await response.json();
       if (data.success) {
@@ -133,13 +130,9 @@ export default function BranchCardsManagement() {
   const saveBranchCard = async (cardData: BranchCard) => {
     try {
       const url = editingCard ? `http://localhost:5000/api/branch-cards/${editingCard.id}` : 'http://localhost:5000/api/branch-cards';
-      const method = editingCard ? 'PUT' : 'POST';
-      
-      const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(cardData)
-      });
+      const response = editingCard
+        ? await apiPut(url, cardData)
+        : await apiPost(url, cardData);
       
       if (response.ok) {
         const data = await response.json();
@@ -165,9 +158,7 @@ export default function BranchCardsManagement() {
   const deleteBranchCard = async (id: number) => {
     if (confirm('Bu şube kartını silmek istediğinizden emin misiniz?')) {
       try {
-        const response = await fetch(`http://localhost:5000/api/branch-cards/${id}`, {
-          method: 'DELETE'
-        });
+        const response = await apiDelete(`http://localhost:5000/api/branch-cards/${id}`);
         
         if (response.ok) {
           const data = await response.json();

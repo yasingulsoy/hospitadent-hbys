@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { apiGet, apiPut, apiDelete } from '../../../lib/api';
 import Link from 'next/link';
 import { 
   FileText, 
@@ -54,7 +55,7 @@ export default function QueriesPage() {
   const loadSavedQueries = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:5000/api/admin/database/save-query');
+      const response = await apiGet('http://localhost:5000/api/admin/database/save-query');
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
@@ -84,11 +85,7 @@ export default function QueriesPage() {
     if (!editingQuery) return;
     
     try {
-      const response = await fetch(`http://localhost:5000/api/admin/database/save-query/${editingQuery.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editForm)
-      });
+      const response = await apiPut(`http://localhost:5000/api/admin/database/save-query/${editingQuery.id}`, editForm);
       
       if (response.ok) {
         alert('Sorgu başarıyla güncellendi!');
@@ -107,9 +104,7 @@ export default function QueriesPage() {
     if (!confirm('Bu sorguyu silmek istediğinizden emin misiniz?')) return;
     
     try {
-      const response = await fetch(`http://localhost:5000/api/admin/database/save-query/${id}`, {
-        method: 'DELETE'
-      });
+      const response = await apiDelete(`http://localhost:5000/api/admin/database/save-query/${id}`);
       
       if (response.ok) {
         alert('Sorgu başarıyla silindi!');

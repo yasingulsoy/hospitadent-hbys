@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { apiGet, apiPost, apiDelete } from '../../../lib/api';
 import Link from 'next/link';
 import { 
   Database, 
@@ -86,7 +87,7 @@ export default function DatabasePage() {
   const loadSavedConnections = async () => {
     setLoadingConnections(true);
     try {
-      const response = await fetch('http://localhost:5000/api/admin/database-connections');
+      const response = await apiGet('http://localhost:5000/api/admin/database-connections');
       const data = await response.json();
       
       if (data.success && data.connections) {
@@ -107,7 +108,7 @@ export default function DatabasePage() {
     setLoadingQueries(true);
     try {
       // Artık doğrudan doğrudan PostgreSQL'den veri çek, parametre gönderme
-      const response = await fetch('http://localhost:5000/api/admin/database/save-query');
+      const response = await apiGet('http://localhost:5000/api/admin/database/save-query');
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
@@ -132,7 +133,7 @@ export default function DatabasePage() {
     // Veritabanından yükle
     const loadConfigFromDB = async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/admin/database/config');
+        const response = await apiGet('http://localhost:5000/api/admin/database/config');
         const data = await response.json();
         
         if (data.success && data.config) {
@@ -167,11 +168,7 @@ export default function DatabasePage() {
   const saveConfig = async () => {
     try {
       // Backend'e kaydet
-      const response = await fetch('http://localhost:5000/api/admin/database/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config)
-      });
+      const response = await apiPost('http://localhost:5000/api/admin/database/config', config);
       
       const data = await response.json();
       
@@ -197,9 +194,7 @@ export default function DatabasePage() {
   const deleteConnection = async (id: number) => {
     if (confirm('Bu bağlantıyı silmek istediğinizden emin misiniz?')) {
       try {
-        const response = await fetch(`http://localhost:5000/api/admin/database-connections/${id}`, {
-          method: 'DELETE'
-        });
+        const response = await apiDelete(`http://localhost:5000/api/admin/database-connections/${id}`);
         
         if (response.ok) {
           // Kayıtlı bağlantıları yeniden yükle
@@ -215,11 +210,7 @@ export default function DatabasePage() {
   const testConnection = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/api/admin/database/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config)
-      });
+      const response = await apiPost('http://localhost:5000/api/admin/database/test', config);
       
       const data = await response.json();
       
@@ -251,11 +242,7 @@ export default function DatabasePage() {
   // Veritabanlarını listele
   const listDatabases = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/admin/database/list', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config)
-      });
+      const response = await apiPost('http://localhost:5000/api/admin/database/list', config);
       
       const data = await response.json();
       if (data.success) {
@@ -272,11 +259,7 @@ export default function DatabasePage() {
   // Tabloları listele
   const listTables = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/admin/database/tables', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config)
-      });
+      const response = await apiPost('http://localhost:5000/api/admin/database/tables', config);
       
       const data = await response.json();
       if (data.success) {
@@ -303,7 +286,7 @@ export default function DatabasePage() {
 
     try {
       // Kayıtlı bağlantıları getir
-      const connectionResponse = await fetch('http://localhost:5000/api/admin/database-connections');
+      const connectionResponse = await apiGet('http://localhost:5000/api/admin/database-connections');
       const connectionData = await connectionResponse.json();
       
       if (!connectionData.success || connectionData.connections.length === 0) {

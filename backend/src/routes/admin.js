@@ -3,6 +3,11 @@ const router = express.Router();
 const pool = require('../config/database');
 const bcrypt = require('bcryptjs');
 const mysql = require('mysql2/promise');
+const { authenticateToken, authorizeRoles } = require('../middleware/auth');
+
+// Tüm admin route'ları için kimlik doğrulama ve yetkilendirme
+router.use(authenticateToken);
+router.use(authorizeRoles(1, 2)); // Sadece admin (1) ve super admin (2) erişebilir
 
 // Database connections listele
 router.get('/database-connections', async (req, res) => {
@@ -770,6 +775,132 @@ router.post('/database/save-query/:id/execute', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Kayıtlı sorgu çalıştırılırken hata oluştu',
+      error: error.message
+    });
+  }
+});
+
+// Users endpoint'i ekle
+router.get('/users', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, username, email, role, görev_tanımı, is_active, created_at, updated_at FROM users ORDER BY id'
+    );
+    
+    res.json({
+      success: true,
+      count: result.rows.length,
+      users: result.rows
+    });
+  } catch (error) {
+    console.error('Users listesi hatası:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Users listelenirken hata oluştu',
+      error: error.message
+    });
+  }
+});
+
+// User ekle
+router.post('/users', async (req, res) => {
+  try {
+    const { username, email, password, role, görev_tanımı } = req.body;
+    
+    if (!username || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username, email ve password gereklidir'
+      });
+    }
+    
+    const result = await pool.query(
+      'INSERT INTO users (username, email, password_hash, role, görev_tanımı, is_active, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW()) RETURNING id, username, email, role, görev_tanımı, is_active, created_at',
+      [username, email, password, role || 0, görev_tanımı || 'Belirtilmemiş', true]
+    );
+    
+    res.status(201).json({
+      success: true,
+      message: 'User başarıyla eklendi',
+      user: result.rows[0]
+    });
+  } catch (error) {
+    console.error('User ekleme hatası:', error);
+    res.status(500).json({
+      success: false,
+      message: 'User eklenirken hata oluştu',
+      error: error.message
+    });
+  }
+});
+
+// User güncelle
+router.put('/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { username, email, password, role, görev_tanımı, is_active } = req.body;
+    
+    let query, params;
+    
+    if (password) {
+      query = 'UPDATE users SET username = $1, email = $2, password_hash = $3, role = $4, görev_tanımı = $5, is_active = $6, updated_at = NOW() WHERE id = $7 RETURNING id, username, email, role, görev_tanımı, is_active, created_at, updated_at';
+      params = [username, email, password, role, görev_tanımı, is_active, id];
+    } else {
+      query = 'UPDATE users SET username = $1, email = $2, role = $3, görev_tanımı = $4, is_active = $5, updated_at = NOW() WHERE id = $6 RETURNING id, username, email, role, görev_tanımı, is_active, created_at, updated_at';
+      params = [username, email, role, görev_tanımı, is_active, id];
+    }
+    
+    const result = await pool.query(query, params);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'User bulunamadı'
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: 'User başarıyla güncellendi',
+      user: result.rows[0]
+    });
+  } catch (error) {
+    console.error('User güncelleme hatası:', error);
+    res.status(500).json({
+      success: false,
+      message: 'User güncellenirken hata oluştu',
+      error: error.message
+    });
+  }
+});
+
+// User sil
+router.delete('/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const result = await pool.query(
+      'DELETE FROM users WHERE id = $1 RETURNING id, username, email',
+      [id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'User bulunamadı'
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: 'User başarıyla silindi',
+      user: result.rows[0]
+    });
+  } catch (error) {
+    console.error('User silme hatası:', error);
+    res.status(500).json({
+      success: false,
+      message: 'User silinirken hata oluştu',
       error: error.message
     });
   }
