@@ -38,7 +38,7 @@ export default function ChartCard({ type, data, title, height = 480 }: ChartCard
 	const safeData = Array.isArray(data) ? data : [];
 
 	return (
-		<div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+		<div className="bg-white p-5 rounded-lg shadow-sm border border-gray-100">
 			{title && (
 				<h3 className="text-lg font-semibold mb-4 text-gray-800">{title}</h3>
 			)}

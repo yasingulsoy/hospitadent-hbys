@@ -1413,10 +1413,10 @@ export default function ReportDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gray-50 p-4">
+      <div className="max-w-[1400px] mx-auto">
         {/* Header */}
-        <div className="bg-white rounded-2xl shadow-xl p-8 mb-8 border border-gray-100">
+        <div className="bg-white rounded-xl shadow-sm p-6 mb-6 border border-gray-100">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <Link
@@ -1425,8 +1425,8 @@ export default function ReportDetailPage() {
               >
                 ← Raporlara Dön
               </Link>
-              <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-3 rounded-xl">
-                <BarChart3 className="h-8 w-8 text-white" />
+              <div className="bg-blue-600 p-3 rounded-lg shadow-sm">
+                <BarChart3 className="h-6 w-6 text-white" />
               </div>
               <div>
                 <h1 className="text-3xl font-bold text-gray-900">{savedQuery?.name}</h1>
@@ -1542,9 +1542,9 @@ export default function ReportDetailPage() {
 
         {/* Grafik Önerileri */}
         {showChartSuggestions && analyzeData && (
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 mb-8">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-6">
             {/* Header with minimize button */}
-            <div className="p-6 border-b border-gray-100">
+            <div className="p-5 border-b border-gray-100">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-800">
                   <Lightbulb className="h-5 w-5 text-yellow-500" />
@@ -1566,10 +1566,10 @@ export default function ReportDetailPage() {
             
             {/* Content - conditionally rendered */}
             {!minimizedSuggestions && (
-              <div className="p-6">
+              <div className="p-5">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {analyzeData.chartSuggestions.map((suggestion, index) => (
-                    <div key={index} className="bg-gradient-to-br from-blue-50 to-indigo-100 p-4 rounded-xl border border-blue-200">
+                    <div key={index} className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                       <div className="flex items-center gap-3 mb-2">
                         <span className="text-2xl">{suggestion.icon}</span>
                         <h4 className="font-semibold text-gray-800 capitalize">{suggestion.type}</h4>
@@ -1600,7 +1600,7 @@ export default function ReportDetailPage() {
 
         {/* Filtreler */}
         {showFilters && analyzeData && (
-          <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-100">
+          <div className="bg-white rounded-xl shadow-sm p-5 mb-6 border border-gray-100">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-800">
               <Filter className="h-5 w-5" />
               Filtreler
@@ -1839,7 +1839,7 @@ export default function ReportDetailPage() {
 
         {/* Grafik Türü Seçimi */}
         {analyzeData && showChart && (
-          <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-100">
+          <div className="bg-white rounded-xl shadow-sm p-5 mb-6 border border-gray-100">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-800">Grafik Türü</h3>
               <button
@@ -1866,7 +1866,7 @@ export default function ReportDetailPage() {
                   }}
                   className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
                     selectedChartType === type
-                      ? 'bg-blue-600 text-white shadow-lg'
+                      ? 'bg-blue-600 text-white shadow-sm'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
@@ -1885,13 +1885,13 @@ export default function ReportDetailPage() {
 
         {/* Gelişmiş Grafik Konfigürasyonu */}
         {showAdvancedChartConfig && analyzeData && (
-          <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-100">
+          <div className="bg-white rounded-xl shadow-sm p-5 mb-6 border border-gray-100">
             <h3 className="text-lg font-semibold mb-4 text-gray-800 flex items-center gap-2">
               <Settings className="h-5 w-5 text-purple-600" />
               Gelişmiş Grafik Ayarları
             </h3>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {/* X Ekseni Seçimi */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">X Ekseni (Kategori/Tarih)</label>
@@ -2027,11 +2027,11 @@ export default function ReportDetailPage() {
         )}
 
         {/* Grafik ve Veri */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Grafik */}
           {showChart && (
-            <div className="space-y-6">
-              <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+            <div className="space-y-5">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
                 <div data-chart="true" className="chart-container">
                   {renderChart()}
                 </div>
@@ -2039,7 +2039,7 @@ export default function ReportDetailPage() {
               
               {/* İstatistikler */}
               {filteredData.length > 0 && (
-                <div className="bg-white p-6 rounded-xl shadow-lg">
+                <div className="bg-white p-5 rounded-lg shadow-sm">
                   <h3 className="text-lg font-semibold mb-4 text-gray-800">Özet İstatistikler</h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="text-center">
@@ -2064,9 +2064,9 @@ export default function ReportDetailPage() {
           )}
 
           {/* Veri Tablosu */}
-          <div className={`bg-white rounded-2xl shadow-xl border border-gray-100 ${!showChart ? 'lg:col-span-2' : ''}`}>
+          <div className={`bg-white rounded-xl shadow-sm border border-gray-100 ${!showChart ? 'lg:col-span-2' : ''}`}>
             {/* Header with minimize button */}
-            <div className="p-6 border-b border-gray-100">
+            <div className="p-5 border-b border-gray-100">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900">Veri Tablosu</h3>
@@ -2093,7 +2093,7 @@ export default function ReportDetailPage() {
               <>
                 <div className="overflow-x-auto max-w-full">
                   <table className="w-full min-w-max">
-                    <thead className="bg-gray-50">
+                    <thead className="bg-gray-50 sticky top-0 z-10">
                       <tr>
                         {queryResult?.results[0] && Object.keys(queryResult.results[0]).map((column) => (
                           <th key={column} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap bg-gray-50 border-b border-gray-200">

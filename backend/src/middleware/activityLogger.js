@@ -185,7 +185,11 @@ const logActivity = async (req, res, next) => {
         username: req.user.username,
         action: actionType,
         details: actionDescription,
-        ip_address: req.ip || req.connection.remoteAddress,
+        ip_address: (req.headers['x-forwarded-for']?.split(',')[0]?.trim())
+          || req.ip
+          || req.socket?.remoteAddress
+          || req.connection?.remoteAddress
+          || 'unknown',
         user_agent: req.get('User-Agent'),
         page_url: fullUrl,
         http_method: httpMethod,

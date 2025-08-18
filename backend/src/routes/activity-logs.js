@@ -158,4 +158,45 @@ router.get('/stats', authenticateToken, authorizeRoles(1, 2), async (req, res) =
   }
 });
 
+// Toplu log silme (IDs ile) - sadece superadmin
+router.post('/delete', authenticateToken, authorizeRoles(2), async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, message: 'Silinecek kayıtlar (ids) gerekli' });
+    }
+
+    // int array olarak güvenli silme
+    const result = await pool.query(
+      'DELETE FROM activity_logs WHERE id = ANY($1::int[])',
+      [ids]
+    );
+
+    res.json({ success: true, deleted: result.rowCount });
+  } catch (error) {
+    console.error('Loglar silinemedi:', error);
+    res.status(500).json({ success: false, message: 'Loglar silinemedi', error: error.message });
+  }
+});
+
+// Tüm logları temizle (opsiyonel tarihe kadar) - sadece superadmin
+router.post('/clear', authenticateToken, authorizeRoles(2), async (req, res) => {
+  try {
+    const { beforeDate } = req.body || {};
+    let query = 'DELETE FROM activity_logs';
+    const params = [];
+
+    if (beforeDate) {
+      query += ' WHERE created_at <= $1';
+      params.push(beforeDate);
+    }
+
+    const result = await pool.query(query, params);
+    res.json({ success: true, deleted: result.rowCount });
+  } catch (error) {
+    console.error('Loglar temizlenemedi:', error);
+    res.status(500).json({ success: false, message: 'Loglar temizlenemedi', error: error.message });
+  }
+});
+
 module.exports = router;

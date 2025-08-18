@@ -119,7 +119,7 @@ export default function LoginPage() {
               </div>
               <div>
                 <h1 className="text-6xl font-black text-white">
-                  HospiTech
+                  HospitaTech
                 </h1>
                 <p className="text-xl font-medium text-white/80 mt-1">
                   Hospitadent Business Intelligence

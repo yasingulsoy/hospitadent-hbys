@@ -237,55 +237,55 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gray-50 p-4">
+      <div className="max-w-[1400px] mx-auto">
         {/* Header */}
-        <div className="bg-white rounded-2xl shadow-xl p-8 mb-8 border border-gray-100">
+        <div className="bg-white rounded-xl shadow-sm p-6 mb-6 border border-gray-100">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <Link
                 href="/"
-                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-300 flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all duration-200 flex items-center gap-2 shadow-sm"
               >
                 <Home className="h-4 w-4" />
                 Anasayfa
               </Link>
-              <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-3 rounded-xl shadow-lg">
-                <BarChart3 className="h-8 w-8 text-white" />
+              <div className="bg-blue-600 p-3 rounded-lg shadow-sm">
+                <BarChart3 className="h-6 w-6 text-white" />
               </div>
               <div>
-                <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+                <h1 className="text-3xl font-bold text-gray-900">
                   Raporlar
                 </h1>
-                <p className="text-gray-600 mt-2 text-lg">Kayıtlı sorgular ve raporlar</p>
+                <p className="text-gray-600 mt-1">Kayıtlı sorgular ve raporlar</p>
               </div>
             </div>
             
             <Link
               href="/admin/database"
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-300 flex items-center gap-3 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 font-semibold text-lg"
+              className="bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-all duration-200 flex items-center gap-2 shadow-sm font-medium"
             >
-              <Plus className="h-5 w-5" />
+              <Plus className="h-4 w-4" />
               Yeni Sorgu
             </Link>
           </div>
         </div>
 
         {/* İstatistikler */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white rounded-lg shadow-sm p-5 border border-gray-100">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Toplam Rapor</p>
                 <p className="text-2xl font-bold text-gray-900">{queries.length}</p>
               </div>
-              <div className="bg-blue-100 p-3 rounded-lg">
-                <FileText className="h-6 w-6 text-blue-600" />
+              <div className="bg-blue-100 p-2.5 rounded-lg">
+                <FileText className="h-5 w-5 text-blue-600" />
               </div>
             </div>
           </div>
           
-          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+          <div className="bg-white rounded-lg shadow-sm p-5 border border-gray-100">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Bu Ay</p>
@@ -297,25 +297,25 @@ export default function ReportsPage() {
                   }).length}
                 </p>
               </div>
-              <div className="bg-green-100 p-3 rounded-lg">
-                <Calendar className="h-6 w-6 text-green-600" />
+              <div className="bg-green-100 p-2.5 rounded-lg">
+                <Calendar className="h-5 w-5 text-green-600" />
               </div>
             </div>
           </div>
           
-          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+          <div className="bg-white rounded-lg shadow-sm p-5 border border-gray-100">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Kategoriler</p>
                 <p className="text-2xl font-bold text-gray-900">{new Set(queries.map(q => q.category)).size}</p>
               </div>
-              <div className="bg-purple-100 p-3 rounded-lg">
-                <Tag className="h-6 w-6 text-purple-600" />
+              <div className="bg-purple-100 p-2.5 rounded-lg">
+                <Tag className="h-5 w-5 text-purple-600" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+          <div className="bg-white rounded-lg shadow-sm p-5 border border-gray-100">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Dinamik Grafik</p>
@@ -326,8 +326,8 @@ export default function ReportsPage() {
                   {showAdvancedChart ? 'Gizle' : 'Göster'}
                 </button>
               </div>
-              <div className="bg-orange-100 p-3 rounded-lg">
-                <BarChart className="h-6 w-6 text-orange-600" />
+              <div className="bg-orange-100 p-2.5 rounded-lg">
+                <BarChart className="h-5 w-5 text-orange-600" />
               </div>
             </div>
           </div>
@@ -335,18 +335,18 @@ export default function ReportsPage() {
 
         {/* Dinamik Grafik Ayarları */}
         {showAdvancedChart && (
-          <div className="bg-white rounded-2xl shadow-xl p-8 mb-8 border border-gray-100">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="bg-gradient-to-r from-orange-500 to-red-500 p-3 rounded-xl shadow-lg">
-                <BarChart className="h-8 w-8 text-white" />
+          <div className="bg-white rounded-xl shadow-sm p-6 mb-6 border border-gray-100">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="bg-orange-500 p-2.5 rounded-lg shadow-sm">
+                <BarChart className="h-6 w-6 text-white" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">Gelişmiş Grafik Ayarları</h2>
+                <h2 className="text-xl font-bold text-gray-900">Gelişmiş Grafik Ayarları</h2>
                 <p className="text-gray-600">X ve Y eksenlerinde tüm veri türlerini kullanarak dinamik grafik oluşturun</p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
               {/* X Ekseni (Kategori/Tarih) */}
               <div className="space-y-3">
                 <label className="block text-sm font-semibold text-gray-700">
@@ -358,7 +358,7 @@ export default function ReportsPage() {
                     const selected = axisOptions.xAxis.find(opt => opt.value === e.target.value);
                     setSelectedXAxis(selected || null);
                   }}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
                 >
                   <option value="">X Ekseni Seçin</option>
                   {axisOptions.xAxis.map((option) => (
@@ -371,7 +371,7 @@ export default function ReportsPage() {
                 <select
                   value={sorting}
                   onChange={(e) => setSorting(e.target.value as 'asc' | 'desc')}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
                 >
                   <option value="desc">Azalan (Büyükten Küçüğe)</option>
                   <option value="asc">Artan (Küçükten Büyüğe)</option>
@@ -389,7 +389,7 @@ export default function ReportsPage() {
                     const selected = axisOptions.yAxis.find(opt => opt.value === e.target.value);
                     setSelectedYAxis(selected || null);
                   }}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
                 >
                   <option value="">Y Ekseni Seçin</option>
                   {axisOptions.yAxis.map((option) => (
@@ -400,7 +400,7 @@ export default function ReportsPage() {
                 </select>
 
                 <div className="flex items-center gap-2">
-                  <BarChart className="h-5 w-5 text-blue-600" />
+                  <BarChart className="h-4 w-4 text-blue-600" />
                   <span className="text-sm text-gray-600">Bar Grafik</span>
                 </div>
               </div>
@@ -413,7 +413,7 @@ export default function ReportsPage() {
                 <select
                   value={aggregationMethod}
                   onChange={(e) => setAggregationMethod(e.target.value as 'sum' | 'count' | 'avg')}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
                 >
                   <option value="sum">Toplam</option>
                   <option value="count">Sayı</option>
@@ -423,13 +423,13 @@ export default function ReportsPage() {
                 <button
                   onClick={createDynamicChart}
                   disabled={!selectedXAxis || !selectedYAxis || chartLoading}
-                  className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-3 rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-300 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                  className="w-full bg-green-600 text-white px-5 py-2.5 rounded-lg hover:bg-green-700 transition-all duration-200 flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {chartLoading ? (
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                   ) : (
                     <>
-                      <BarChart className="h-5 w-5" />
+                      <BarChart className="h-4 w-4" />
                       Grafiği Uygula
                     </>
                   )}
@@ -439,7 +439,7 @@ export default function ReportsPage() {
 
             {/* Grafik Sonucu */}
             {chartData.length > 0 && (
-              <div className="mt-8 p-6 bg-gray-50 rounded-xl">
+              <div className="mt-6 p-5 bg-gray-50 rounded-lg">
                 <h3 className="text-lg font-semibold text-gray-800 mb-4">Grafik Sonucu</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {chartData.slice(0, 6).map((item, index) => (
@@ -460,28 +460,28 @@ export default function ReportsPage() {
         )}
 
         {/* Arama ve Filtreler */}
-        <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-100">
+        <div className="bg-white rounded-xl shadow-sm p-5 mb-6 border border-gray-100">
           <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
             <div className="flex-1 w-full lg:w-auto">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <input
                   type="text"
                   placeholder="Rapor ara..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full lg:w-96 pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  className="w-full lg:w-96 pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                 />
               </div>
             </div>
             
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
-                <Filter className="h-5 w-5 text-gray-500" />
+                <Filter className="h-4 w-4 text-gray-500" />
                 <select
                   value={selectedCategory}
                   onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  className="px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                 >
                   {categories.map(category => (
                     <option key={category} value={category}>{category}</option>
@@ -494,7 +494,7 @@ export default function ReportsPage() {
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as any)}
-                  className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  className="px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                 >
                   <option value="date">Tarih</option>
                   <option value="name">İsim</option>
@@ -507,8 +507,8 @@ export default function ReportsPage() {
 
         {/* Rapor Kartları */}
         {filteredAndSortedQueries.length === 0 ? (
-          <div className="bg-white rounded-2xl shadow-xl p-12 text-center border border-gray-100">
-            <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+          <div className="bg-white rounded-xl shadow-sm p-10 text-center border border-gray-100">
+            <FileText className="h-14 w-14 text-gray-400 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-gray-900 mb-2">Rapor Bulunamadı</h3>
             <p className="text-gray-600 mb-6">
               {searchTerm || selectedCategory !== 'Tüm Kategoriler' 
@@ -517,27 +517,27 @@ export default function ReportsPage() {
             </p>
             <Link
               href="/admin/database"
-              className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
+              className="bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
             >
               <Plus className="h-4 w-4" />
               İlk Raporı Oluştur
             </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredAndSortedQueries.map((query) => {
               const CategoryIcon = getCategoryIcon(query.category);
               
               return (
-                <div key={query.id} className="bg-white rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
-                  <div className="p-6">
+                <div key={query.id} className="bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200 transform hover:-translate-y-0.5 group">
+                  <div className="p-5">
                     {/* Header */}
                     <div className="flex items-start justify-between mb-4">
-                      <div className="bg-gradient-to-br from-blue-50 to-indigo-100 p-3 rounded-xl">
-                        <CategoryIcon className="h-6 w-6 text-blue-600" />
+                      <div className="bg-blue-50 p-2.5 rounded-lg">
+                        <CategoryIcon className="h-5 w-5 text-blue-600" />
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getCategoryColor(query.category)}`}>
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getCategoryColor(query.category)}`}>
                           {query.category}
                         </span>
                         {query.is_public && (
@@ -575,7 +575,7 @@ export default function ReportsPage() {
                     <div className="flex items-center gap-2">
                       <Link
                         href={`/reports/${query.id}`}
-                        className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 flex items-center justify-center gap-2 font-medium group-hover:shadow-lg"
+                        className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all duration-200 flex items-center justify-center gap-2 font-medium"
                       >
                         <Eye className="h-4 w-4" />
                         Görüntüle
@@ -609,9 +609,9 @@ export default function ReportsPage() {
         )}
 
         {/* Alt Bilgi */}
-        <div className="mt-12 text-center">
-          <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-100">
-            <Lightbulb className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
+        <div className="mt-10 text-center">
+          <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+            <Lightbulb className="h-10 w-10 text-yellow-500 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-gray-900 mb-2">Rapor Oluşturma İpuçları</h3>
             <p className="text-gray-600 mb-6 max-w-2xl mx-auto">
               Etkili raporlar oluşturmak için SQL sorgularınızı optimize edin, 

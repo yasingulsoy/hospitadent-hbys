@@ -67,20 +67,20 @@ export default function Header() {
   };
 
   return (
-    <header className="bg-white shadow-xl border-b border-gray-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="py-6">
+    <header className="bg-white shadow-sm border-b border-gray-200">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="py-5">
           <div className="flex items-center justify-between">
             {/* Sol taraf - Logo ve Sistem Adı */}
             <div className="flex items-center space-x-6">
-              <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 p-4 rounded-2xl shadow-2xl">
-                <Building2 className="h-10 w-10 text-white" />
+              <div className="bg-blue-600 p-3 rounded-lg shadow-sm">
+                <Building2 className="h-8 w-8 text-white" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 via-blue-900 to-purple-900 bg-clip-text text-transparent">
+                <h1 className="text-2xl font-bold text-gray-900">
                   Hospitadent Dental HBYS
                 </h1>
-                <p className="text-lg text-gray-600 mt-2 font-medium">Merkezi Yönetim Sistemi</p>
+                <p className="text-base text-gray-600 mt-1 font-medium">Merkezi Yönetim Sistemi</p>
                 <p className="text-sm text-gray-500 mt-1">Kurumsal Diş Sağlığı Yönetimi Platformu</p>
               </div>
             </div>
@@ -91,7 +91,7 @@ export default function Header() {
               <div className="text-right">
                 <div className="flex items-center space-x-3">
                   <div className="bg-green-100 p-2 rounded-full">
-                    <Activity className="h-5 w-5 text-green-600" />
+                    <Activity className="h-4 w-4 text-green-600" />
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Sistem Durumu</p>
@@ -108,7 +108,7 @@ export default function Header() {
                     <div className="text-sm text-gray-600">Hoşgeldiniz,</div>
                     <div className="text-sm font-semibold text-gray-800">{userName}</div>
                   </div>
-                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                  <div className="w-9 h-9 bg-blue-500 rounded-full flex items-center justify-center">
                     <span className="text-white text-sm font-semibold">
                       {userName.charAt(0).toUpperCase()}
                     </span>
@@ -122,14 +122,14 @@ export default function Header() {
                   <>
                     <Link
                       href="/"
-                      className="bg-gray-100 text-gray-700 px-4 py-2 rounded-xl hover:bg-gray-200 transition-all duration-300 font-semibold flex items-center space-x-2"
+                      className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-all duration-200 font-medium flex items-center space-x-2"
                     >
                       <span>Ana Sayfa</span>
                     </Link>
                     {canSeeAdmin && (
                       <Link
                         href="/admin"
-                        className="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition-all duration-300 font-semibold flex items-center space-x-2"
+                        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all duration-200 font-medium flex items-center space-x-2"
                       >
                         <Shield className="h-4 w-4" />
                         <span>Admin Panel</span>
@@ -137,7 +137,7 @@ export default function Header() {
                     )}
                     <button 
                       onClick={handleLogout}
-                      className="bg-red-600 text-white px-4 py-2 rounded-xl hover:bg-red-700 transition-all duration-300 font-semibold flex items-center space-x-2"
+                      className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-all duration-200 font-medium flex items-center space-x-2"
                     >
                       <LogOut className="h-4 w-4" />
                       <span>Çıkış Yap</span>
@@ -146,7 +146,7 @@ export default function Header() {
                 ) : (
                   <Link
                     href="/login"
-                    className="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition-all duration-300 font-semibold flex items-center space-x-2"
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all duration-200 font-medium flex items-center space-x-2"
                   >
                     <span>Giriş Yap</span>
                   </Link>
