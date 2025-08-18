@@ -37,6 +37,7 @@ import {
   Settings
 } from 'lucide-react';
 import Link from 'next/link';
+import ChartCard from '../../components/ChartCard';
 
 interface SavedQuery {
   id: number;
@@ -792,179 +793,13 @@ export default function ReportDetailPage() {
       
       switch (type) {
         case 'bar':
-          const maxBarValue = Math.max(...chartData.map(d => d.value));
-          return (
-            <div className="bg-white p-6 rounded-xl shadow-lg">
-              <h3 className="text-lg font-semibold mb-4 text-gray-800">
-                {aggregation === 'sum' ? 'Toplam' : 
-                 aggregation === 'count' ? 'Sayı' : 
-                 aggregation === 'average' ? 'Ortalama' : 
-                 aggregation === 'min' ? 'Minimum' : 'Maksimum'} {yAxis} - {xAxis}
-              </h3>
-              <div className="h-64 flex items-end justify-center space-x-2 relative overflow-x-auto">
-                {/* Y ekseni etiketleri */}
-                <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-xs text-gray-500 pr-2 z-10">
-                  {[0, 25, 50, 75, 100].map(percent => (
-                    <span key={percent} className="transform -translate-y-1/2">
-                      {Math.round((maxBarValue * percent) / 100)}
-                    </span>
-                  ))}
-                </div>
-                
-                {/* Grid çizgileri */}
-                <div className="absolute inset-0 flex flex-col justify-between">
-                  {[0, 25, 50, 75, 100].map(percent => (
-                    <div key={percent} className="border-t border-gray-200 w-full"></div>
-                  ))}
-                </div>
-                
-                {/* Bar'lar */}
-                <div className="flex items-end space-x-3 min-w-max px-8">
-                  {chartData.map((item, index) => {
-                    const barHeight = maxBarValue > 0 ? (item.value / maxBarValue) * 200 : 0;
-                    const percentage = maxBarValue > 0 ? (item.value / maxBarValue) * 100 : 0;
-                    
-                    return (
-                      <div key={index} className="flex flex-col items-center relative group">
-                        {/* Tooltip */}
-                        <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
-                          <div className="text-center">
-                            <div className="font-semibold">{item.label}</div>
-                            <div>{item.value.toFixed(2)} ({percentage.toFixed(1)}%)</div>
-                            <div className="text-xs text-gray-300">{item.count} kayıt</div>
-                          </div>
-                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
-                        </div>
-                        
-                        {/* Bar */}
-                        <div className="relative">
-                          <div 
-                            className="w-12 bg-gradient-to-t from-blue-600 via-blue-500 to-blue-400 rounded-t shadow-lg transition-all duration-500 hover:from-blue-700 hover:via-blue-600 hover:to-blue-500 hover:shadow-xl hover:scale-105 cursor-pointer"
-                            style={{ 
-                              height: `${Math.max(barHeight, 4)}px`,
-                              animationDelay: `${index * 100}ms`
-                            }}
-                          >
-                            {/* Bar içi desen */}
-                            <div className="w-full h-full bg-gradient-to-t from-blue-600 via-blue-500 to-blue-400 rounded-t opacity-90"></div>
-                          </div>
-                          
-                          {/* Değer etiketi */}
-                          <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 text-xs font-bold text-gray-700 bg-white px-2 py-1 rounded shadow-sm border border-gray-200">
-                            {item.value.toFixed(1)}
-                          </div>
-                        </div>
-                        
-                        {/* X ekseni etiketi */}
-                        <div className="mt-3 text-center">
-                          <span 
-                            className="text-xs text-gray-600 font-medium leading-tight block max-w-20 truncate" 
-                            title={item.label}
-                            style={{
-                              transform: 'rotate(-45deg)',
-                              transformOrigin: 'top left',
-                              marginTop: '8px',
-                              marginLeft: '10px'
-                            }}
-                          >
-                            {item.label}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          );
-
+          return <ChartCard type="bar" data={chartData} title={`${yAxis} - ${xAxis}`} />;
         case 'pie':
-          const totalPieValue = chartData.reduce((sum, item) => sum + item.value, 0);
-          return (
-            <div className="bg-white p-6 rounded-xl shadow-lg">
-              <h3 className="text-lg font-semibold mb-4 text-gray-800">
-                {aggregation === 'sum' ? 'Toplam' : 
-                 aggregation === 'count' ? 'Sayı' : 
-                 aggregation === 'average' ? 'Ortalama' : 
-                 aggregation === 'min' ? 'Minimum' : 'Maksimum'} {yAxis} Dağılımı
-              </h3>
-              <div className="flex items-center justify-center">
-                <div className="relative w-64 h-64">
-                  {/* Pasta grafik */}
-                  <svg className="w-full h-full" viewBox="0 0 100 100">
-                    {chartData.map((item, index) => {
-                      const percentage = totalPieValue > 0 ? (item.value / totalPieValue) * 100 : 0;
-                      const startAngle = chartData.slice(0, index).reduce((sum, d) => 
-                        sum + (totalPieValue > 0 ? (d.value / totalPieValue) * 360 : 0), 0
-                      );
-                      const endAngle = startAngle + (percentage * 360) / 100;
-                      
-                      // Renk paleti
-                      const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4', '#84CC16', '#F97316'];
-                      const color = colors[index % colors.length];
-                      
-                      // Pasta dilimi çiz
-                      const x1 = 50 + 35 * Math.cos(startAngle * Math.PI / 180);
-                      const y1 = 50 + 35 * Math.sin(startAngle * Math.PI / 180);
-                      const x2 = 50 + 35 * Math.cos(endAngle * Math.PI / 180);
-                      const y2 = 50 + 35 * Math.sin(endAngle * Math.PI / 180);
-                      
-                      const largeArcFlag = percentage > 50 ? 1 : 0;
-                      
-                      return (
-                        <g key={index}>
-                          <path
-                            d={`M 50 50 L ${x1} ${y1} A 35 35 0 ${largeArcFlag} 1 ${x2} ${y2} Z`}
-                            fill={color}
-                            stroke="white"
-                            strokeWidth="0.5"
-                            className="hover:opacity-80 transition-opacity cursor-pointer"
-                          />
-                        </g>
-                      );
-                    })}
-                  </svg>
-                  
-                  {/* Merkez bilgi */}
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-gray-800">{chartData.length}</div>
-                      <div className="text-sm text-gray-600">Kategori</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Legend */}
-              <div className="mt-6 grid grid-cols-2 gap-2">
-                {chartData.slice(0, 8).map((item, index) => {
-                  const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4', '#84CC16', '#F97316'];
-                  const color = colors[index % colors.length];
-                  const percentage = totalPieValue > 0 ? (item.value / totalPieValue) * 100 : 0;
-                  
-                  return (
-                    <div key={index} className="flex items-center gap-2 text-sm">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }}></div>
-                      <span className="truncate">{item.label}</span>
-                      <span className="text-gray-500">({percentage.toFixed(1)}%)</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-
+          return <ChartCard type="pie" data={chartData} title={`${yAxis} Dağılımı`} />;
+        case 'line':
+          return <ChartCard type="line" data={chartData} title={`${yAxis} Trendi`} />;
         default:
-          return (
-            <div className="bg-white p-6 rounded-xl shadow-lg">
-              <h3 className="text-lg font-semibold mb-4 text-gray-800">
-                {type.charAt(0).toUpperCase() + type.slice(1)} Grafik - {yAxis} vs {xAxis}
-              </h3>
-              <div className="h-64 flex items-center justify-center text-gray-500">
-                Bu grafik türü henüz desteklenmiyor. Bar veya Pasta grafik kullanın.
-              </div>
-            </div>
-          );
+          return <ChartCard type="bar" data={chartData} title={`${yAxis} - ${xAxis}`} />;
       }
     }
 

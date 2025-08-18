@@ -69,6 +69,7 @@ export default function ReportsPage() {
   const [aggregationMethod, setAggregationMethod] = useState<'sum' | 'count' | 'avg'>('sum');
   const [chartData, setChartData] = useState<any[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
+  const [branchFilter, setBranchFilter] = useState<string>('');
 
   useEffect(() => {
     loadSavedQueries();
@@ -123,12 +124,6 @@ export default function ReportsPage() {
 
     setChartLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      
-      if (!token) {
-        alert('Lütfen önce giriş yapın');
-        return;
-      }
 
       console.log('🔍 Grafik oluşturuluyor:', {
         xAxis: selectedXAxis,
@@ -142,7 +137,9 @@ export default function ReportsPage() {
         yAxis: selectedYAxis,
         aggregationMethod,
         sorting,
-        filters: {}
+        filters: {
+          clinic_name: branchFilter || undefined
+        }
       });
 
       if (!response.ok) {

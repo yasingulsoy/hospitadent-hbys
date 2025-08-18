@@ -851,14 +851,11 @@ router.post('/dynamic-chart', authenticateToken, async (req, res) => {
     
     try {
       if (xAxis.type === 'date') {
-        // Tarih bazlı veri çek
-        chartData = await getDateBasedDataFromDB(xAxis, yAxis, filters);
+        chartData = await getDateBasedDataFromDB(xAxis, yAxis, filters, aggregationMethod);
       } else if (xAxis.type === 'category') {
-        // Kategorik veri çek
-        chartData = await getCategoryBasedDataFromDB(xAxis, yAxis, filters);
+        chartData = await getCategoryBasedDataFromDB(xAxis, yAxis, filters, aggregationMethod);
       } else {
-        // Varsayılan veri çek
-        chartData = await getDefaultDataFromDB(xAxis, yAxis, filters);
+        chartData = await getDefaultDataFromDB(xAxis, yAxis, filters, aggregationMethod);
       }
     } catch (dbError) {
       console.error('Veritabanı hatası:', dbError);
@@ -1008,7 +1005,7 @@ async function getDefaultData(xAxis, yAxis, filters, includeDate) {
 }
 
 // Veritabanından tarih bazlı veri çek
-async function getDateBasedDataFromDB(xAxis, yAxis, filters) {
+async function getDateBasedDataFromDB(xAxis, yAxis, filters, aggregationMethod) {
   try {
     console.log('📅 Veritabanından tarih bazlı veri çekiliyor:', xAxis.value, yAxis.value);
     
@@ -1039,7 +1036,11 @@ async function getDateBasedDataFromDB(xAxis, yAxis, filters) {
     
     return result.map(item => ({
       label: item.date_label,
-      value: yAxis.type === 'count' ? item.count_value : item.sum_value || 0
+      value: (aggregationMethod === 'count' || yAxis.type === 'count')
+        ? Number(item.count_value)
+        : aggregationMethod === 'avg'
+          ? (Number(item.sum_value) || 0) / (Number(item.count_value) || 1)
+          : Number(item.sum_value) || 0
     }));
     
   } catch (error) {
@@ -1049,7 +1050,7 @@ async function getDateBasedDataFromDB(xAxis, yAxis, filters) {
 }
 
 // Veritabanından kategorik veri çek
-async function getCategoryBasedDataFromDB(xAxis, yAxis, filters) {
+async function getCategoryBasedDataFromDB(xAxis, yAxis, filters, aggregationMethod) {
   try {
     console.log('🏷️ Veritabanından kategorik veri çekiliyor:', xAxis.value, yAxis.value);
     
@@ -1069,22 +1070,32 @@ async function getCategoryBasedDataFromDB(xAxis, yAxis, filters) {
       tableName = 'users';
     }
     
-    // Prisma ile veri çek
+    // Basit filtreler (örn. şube/klinik adı)
+    const whereClauses = [];
+    if (filters?.clinic_name) {
+      whereClauses.push(prisma.sql`clinic_name = ${filters.clinic_name}`);
+    }
+    const whereSQL = whereClauses.length > 0 ? prisma.join([prisma.sql`WHERE `, prisma.join(whereClauses, prisma.sql` AND `)]) : prisma.sql``;
+    
     const result = await prisma.$queryRaw`
       SELECT 
-        ${categoryField} as category_label,
+        ${prisma.raw(categoryField)} as category_label,
         COUNT(*) as count_value,
-        SUM(${yAxis.value}) as sum_value
-      FROM ${tableName}
-      WHERE ${categoryField} IS NOT NULL
-      GROUP BY ${categoryField}
+        SUM(${prisma.raw(yAxis.value)}) as sum_value
+      FROM ${prisma.raw(tableName)}
+      ${whereSQL}
+      GROUP BY ${prisma.raw(categoryField)}
       ORDER BY count_value DESC
       LIMIT 50
     `;
     
     return result.map(item => ({
       label: item.category_label || 'Bilinmeyen',
-      value: yAxis.type === 'count' ? item.count_value : item.sum_value || 0
+      value: (aggregationMethod === 'count' || yAxis.type === 'count')
+        ? Number(item.count_value)
+        : aggregationMethod === 'avg'
+          ? (Number(item.sum_value) || 0) / (Number(item.count_value) || 1)
+          : Number(item.sum_value) || 0
     }));
     
   } catch (error) {
@@ -1094,7 +1105,7 @@ async function getCategoryBasedDataFromDB(xAxis, yAxis, filters) {
 }
 
 // Veritabanından varsayılan veri çek
-async function getDefaultDataFromDB(xAxis, yAxis, filters) {
+async function getDefaultDataFromDB(xAxis, yAxis, filters, aggregationMethod) {
   try {
     console.log('🔧 Veritabanından varsayılan veri çekiliyor:', xAxis.value, yAxis.value);
     
