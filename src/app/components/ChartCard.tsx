@@ -34,7 +34,7 @@ interface ChartCardProps {
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4', '#84CC16', '#F97316'];
 
-export default function ChartCard({ type, data, title, height = 320 }: ChartCardProps) {
+export default function ChartCard({ type, data, title, height = 480 }: ChartCardProps) {
 	const safeData = Array.isArray(data) ? data : [];
 
 	return (

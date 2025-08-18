@@ -106,6 +106,8 @@ export default function ReportDetailPage() {
   const [showChart, setShowChart] = useState(true);
   const [showChartSuggestions, setShowChartSuggestions] = useState(false);
   const [showAdvancedChartConfig, setShowAdvancedChartConfig] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
+  const isAdminOrSuper = role === '1' || role === '2' || role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'admin' || role === 'superadmin';
 
   // Minimize/maximize state'leri
   const [minimizedSuggestions, setMinimizedSuggestions] = useState(false);
@@ -115,6 +117,39 @@ export default function ReportDetailPage() {
     if (params.id) {
       loadSavedQuery(params.id as string);
     }
+  }, [params.id]);
+
+  // Cookie'den rol oku
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      const m = document.cookie.match(/(?:^|; )role=([^;]+)/);
+      setRole(m ? decodeURIComponent(m[1]) : null);
+    }
+  }, []);
+
+  // Sayfa açılışında varsayılan grafik konfigürasyonunu yükle
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        if (!params.id) return;
+        const res = await apiGet(`http://localhost:5000/api/reports/${params.id}/chart-config`);
+        const data = await res.json();
+        if (data.success && data.config) {
+          const cfg = data.config;
+          const advCfg = createAdvancedChartConfig(cfg.chart_type, cfg.x_axis, cfg.y_axis);
+          if (advCfg) {
+            advCfg.aggregation = cfg.aggregation;
+            advCfg.sortBy = cfg.sort_by;
+            advCfg.groupBy = cfg.group_by || cfg.x_axis;
+            setAdvancedChartConfig(advCfg);
+            setSelectedChartType(cfg.chart_type);
+          }
+        }
+      } catch (e) {
+        // sessiz geç
+      }
+    };
+    fetchConfig();
   }, [params.id]);
 
   // Veri analizi ve grafik konfigürasyonu
@@ -1442,6 +1477,45 @@ export default function ReportDetailPage() {
                 <Filter className="h-4 w-4" />
                 {showFilters ? '✔ Filtreler' : 'Filtreler'}
               </button>
+
+              {isAdminOrSuper && (
+                <button
+                  onClick={async () => {
+                    try {
+                      if (!advancedChartConfig) {
+                        alert('Önce grafik ayarlarını seçin');
+                        return;
+                      }
+                      const payload = {
+                        name: 'Varsayılan Grafik',
+                        chart_type: advancedChartConfig.type,
+                        x_axis: advancedChartConfig.xAxis,
+                        y_axis: advancedChartConfig.yAxis,
+                        x_axis_type: advancedChartConfig.xAxisType,
+                        y_axis_type: advancedChartConfig.yAxisType,
+                        series: advancedChartConfig.series,
+                        aggregation: advancedChartConfig.aggregation,
+                        sort_by: advancedChartConfig.sortBy,
+                        group_by: advancedChartConfig.groupBy,
+                        height: 520,
+                        chart_options: {},
+                        filters: filters,
+                        is_default: true
+                      };
+                      const res = await apiPost(`http://localhost:5000/api/reports/${params.id}/chart-config`, payload);
+                      const data = await res.json();
+                      if (!res.ok || !data.success) throw new Error(data.message || 'Kaydedilemedi');
+                      alert('Grafik konfigürasyonu kaydedildi');
+                    } catch (err: any) {
+                      alert(`Kaydetme hatası: ${err.message}`);
+                    }
+                  }}
+                  className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
+                >
+                  <CheckCircle className="h-4 w-4" />
+                  Grafiği Kaydet (Admin)
+                </button>
+              )}
 
               <button
                 onClick={() => setShowChartSuggestions(!showChartSuggestions)}

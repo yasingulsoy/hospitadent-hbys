@@ -12,9 +12,9 @@ export const apiRequest = async (url: string, options: RequestInit = {}) => {
   const token = getCookie('token');
   
   // Headers'ı hazırla
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...options.headers,
+    ...(options.headers as Record<string, string> || {}),
   };
 
   // Eğer token varsa Authorization header'ı ekle
@@ -46,13 +46,13 @@ export const apiRequest = async (url: string, options: RequestInit = {}) => {
 export const apiGet = (url: string) => apiRequest(url);
 
 // POST isteği
-export const apiPost = (url: string, data: any) => apiRequest(url, {
+export const apiPost = (url: string, data: unknown) => apiRequest(url, {
   method: 'POST',
   body: JSON.stringify(data),
 });
 
 // PUT isteği
-export const apiPut = (url: string, data: any) => apiRequest(url, {
+export const apiPut = (url: string, data: unknown) => apiRequest(url, {
   method: 'PUT',
   body: JSON.stringify(data),
 });

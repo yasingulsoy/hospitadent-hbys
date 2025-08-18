@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { apiGet, apiPost } from '../../lib/api';
+import { apiGet, apiPost } from '../../../lib/api';
 import { 
   ArrowLeft, 
   Save, 

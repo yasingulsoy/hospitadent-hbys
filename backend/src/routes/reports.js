@@ -1,5 +1,6 @@
 const express = require('express');
 const { authenticateToken, authorizeRoles } = require('../middleware/auth');
+const pool = require('../config/database');
 
 const router = express.Router();
 
@@ -1129,3 +1130,169 @@ async function getDefaultDataFromDB(xAxis, yAxis, filters, aggregationMethod) {
 }
 
 module.exports = router; 
+ 
+// ==========================
+// Grafik Konfigürasyonları
+// ==========================
+// Not: Okuma herkes için serbest; oluşturma/silme sadece Admin(1) ve SuperAdmin(2)
+
+function isAdminOrSuper(user) {
+  return user && (user.role === 1 || user.role === 2 || user.role === '1' || user.role === '2');
+}
+
+// Varsayılan konfigürasyonu getir (herkese açık - login gerekli)
+router.get('/:reportId/chart-config', authenticateToken, async (req, res) => {
+  try {
+    const reportId = parseInt(req.params.reportId);
+    if (Number.isNaN(reportId)) {
+      return res.status(400).json({ success: false, message: 'Geçersiz reportId' });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT *
+       FROM report_chart_configs
+       WHERE report_id = $1 AND is_active = TRUE
+       ORDER BY is_default DESC, updated_at DESC
+       LIMIT 1`,
+      [reportId]
+    );
+
+    return res.json({ success: true, config: rows[0] || null });
+  } catch (error) {
+    console.error('chart-config get error:', error);
+    return res.status(500).json({ success: false, message: 'Konfigürasyon alınamadı', error: error.message });
+  }
+});
+
+// Belirli rapor için tüm konfigleri listele (sadece admin/superadmin)
+router.get('/:reportId/chart-configs', authenticateToken, async (req, res) => {
+  try {
+    if (!isAdminOrSuper(req.user)) {
+      return res.status(403).json({ success: false, message: 'Bu işlem için yetkiniz yok' });
+    }
+
+    const reportId = parseInt(req.params.reportId);
+    if (Number.isNaN(reportId)) {
+      return res.status(400).json({ success: false, message: 'Geçersiz reportId' });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT * FROM report_chart_configs
+       WHERE report_id = $1 AND is_active = TRUE
+       ORDER BY is_default DESC, updated_at DESC`,
+      [reportId]
+    );
+    return res.json({ success: true, configs: rows });
+  } catch (error) {
+    console.error('chart-configs list error:', error);
+    return res.status(500).json({ success: false, message: 'Konfigürasyonlar listelenemedi', error: error.message });
+  }
+});
+
+// Varsayılan konfig ekle/güncelle (admin/superadmin)
+router.post('/:reportId/chart-config', authenticateToken, async (req, res) => {
+  try {
+    if (!isAdminOrSuper(req.user)) {
+      return res.status(403).json({ success: false, message: 'Bu işlem için yetkiniz yok' });
+    }
+
+    const reportId = parseInt(req.params.reportId);
+    if (Number.isNaN(reportId)) {
+      return res.status(400).json({ success: false, message: 'Geçersiz reportId' });
+    }
+
+    const {
+      name = 'Varsayılan Grafik',
+      chart_type,
+      x_axis,
+      y_axis,
+      x_axis_type = 'categorical',
+      y_axis_type = 'numeric',
+      series = [],
+      aggregation = 'sum',
+      sort_by = 'desc',
+      group_by = null,
+      height = 480,
+      chart_options = {},
+      filters = {},
+      is_default = true
+    } = req.body || {};
+
+    if (!chart_type || !x_axis || !y_axis) {
+      return res.status(400).json({ success: false, message: 'chart_type, x_axis ve y_axis zorunludur' });
+    }
+
+    // Eğer varsayılan işaretlenecekse, mevcut varsayılanları kaldır
+    if (is_default) {
+      await pool.query('UPDATE report_chart_configs SET is_default = FALSE WHERE report_id = $1', [reportId]);
+    }
+
+    const upsertSql = `
+      INSERT INTO report_chart_configs (
+        report_id, name, chart_type, x_axis, y_axis, x_axis_type, y_axis_type, series,
+        aggregation, sort_by, group_by, height, chart_options, filters, is_default
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8,
+        $9, $10, $11, $12, $13, $14, $15
+      )
+      ON CONFLICT (report_id, name) DO UPDATE SET
+        chart_type = EXCLUDED.chart_type,
+        x_axis = EXCLUDED.x_axis,
+        y_axis = EXCLUDED.y_axis,
+        x_axis_type = EXCLUDED.x_axis_type,
+        y_axis_type = EXCLUDED.y_axis_type,
+        series = EXCLUDED.series,
+        aggregation = EXCLUDED.aggregation,
+        sort_by = EXCLUDED.sort_by,
+        group_by = EXCLUDED.group_by,
+        height = EXCLUDED.height,
+        chart_options = EXCLUDED.chart_options,
+        filters = EXCLUDED.filters,
+        is_default = EXCLUDED.is_default,
+        updated_at = NOW()
+      RETURNING *;
+    `;
+
+    const params = [
+      reportId,
+      name,
+      chart_type,
+      x_axis,
+      y_axis,
+      x_axis_type,
+      y_axis_type,
+      Array.isArray(series) ? series : [],
+      aggregation,
+      sort_by,
+      group_by,
+      height,
+      chart_options,
+      filters,
+      !!is_default
+    ];
+
+    const { rows } = await pool.query(upsertSql, params);
+    return res.json({ success: true, config: rows[0] });
+  } catch (error) {
+    console.error('chart-config upsert error:', error);
+    return res.status(500).json({ success: false, message: 'Konfigürasyon kaydedilemedi', error: error.message });
+  }
+});
+
+// Konfig sil (admin/superadmin)
+router.delete('/chart-config/:configId', authenticateToken, async (req, res) => {
+  try {
+    if (!isAdminOrSuper(req.user)) {
+      return res.status(403).json({ success: false, message: 'Bu işlem için yetkiniz yok' });
+    }
+    const configId = parseInt(req.params.configId);
+    if (Number.isNaN(configId)) {
+      return res.status(400).json({ success: false, message: 'Geçersiz configId' });
+    }
+    await pool.query('DELETE FROM report_chart_configs WHERE id = $1', [configId]);
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('chart-config delete error:', error);
+    return res.status(500).json({ success: false, message: 'Konfigürasyon silinemedi', error: error.message });
+  }
+});
