@@ -38,6 +38,9 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import ChartCard from '../../components/ChartCard';
+import dynamic from 'next/dynamic';
+
+const LoadingOverlay = dynamic(() => import('../../components/LoadingOverlay'), { ssr: false });
 
 interface SavedQuery {
   id: number;
@@ -129,6 +132,39 @@ export default function ReportDetailPage() {
   const [minimizedSuggestions, setMinimizedSuggestions] = useState(false);
   const [minimizedDataTable, setMinimizedDataTable] = useState(true);
   const [allChartConfigs, setAllChartConfigs] = useState<any[]>([]);
+  const [minimizedServerFilters, setMinimizedServerFilters] = useState(false);
+
+  // Yardımcı: YYYY-MM-DD formatında tarih üret
+  const formatDateYMD = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  // Varsayılan: atanmış tarih aralığı filtreleri yoksa bu ayın başı - bugün
+  useEffect(() => {
+    if (!assignedFilters || assignedFilters.length === 0) return;
+    const updates: Record<string, any> = {};
+    const today = new Date();
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    assignedFilters.forEach((af: any) => {
+      const content = af?.content;
+      const startKey = content?.params?.start;
+      const endKey = content?.params?.end;
+      if (content?.type === 'date_range' && startKey && endKey) {
+        const hasStart = !!serverFilterParams[startKey];
+        const hasEnd = !!serverFilterParams[endKey];
+        if (!hasStart && !hasEnd) {
+          updates[startKey] = formatDateYMD(monthStart);
+          updates[endKey] = formatDateYMD(today);
+        }
+      }
+    });
+    if (Object.keys(updates).length > 0) {
+      setServerFilterParams(prev => ({ ...updates, ...prev }));
+    }
+  }, [assignedFilters]);
 
   useEffect(() => {
     if (params.id) {
@@ -1652,16 +1688,7 @@ export default function ReportDetailPage() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center py-20">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Rapor yükleniyor...</p>
-          </div>
-        </div>
-      </div>
-    );
+    return <LoadingOverlay message="Rapor yükleniyor" fullscreen />;
   }
 
   if (error) {
@@ -1709,7 +1736,7 @@ export default function ReportDetailPage() {
               <button
                 onClick={executeWithFilters}
                 disabled={executing}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+                className="relative bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50"
               >
                 <RefreshCw className={`h-4 w-4 ${executing ? 'animate-spin' : ''}`} />
                 {executing ? 'Çalıştırılıyor...' : 'Uygula'}
@@ -1788,19 +1815,7 @@ export default function ReportDetailPage() {
               )}
 
               {/* Gelişmiş Ayarlar toggle: sadece edit modunda göster */}
-              {isAdminOrSuper && (
-                <button
-                  onClick={() => setShowAdvancedChartConfig(prev => !prev)}
-                  className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
-                    isEditMode && showAdvancedChartConfig
-                      ? 'bg-purple-600 text-white hover:bg-purple-700'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  <Settings className="h-4 w-4" />
-                  Gelişmiş Ayarlar
-                </button>
-              )}
+              {/* İstenmediği için Gelişmiş Ayarlar butonu kaldırıldı */}
 
               <button
                 onClick={() => setShowChartSuggestions(!showChartSuggestions)}
@@ -1903,9 +1918,19 @@ export default function ReportDetailPage() {
         {savedQuery && (
           <div className="bg-white rounded-xl shadow-sm p-5 mb-6 border border-gray-100">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-800">
-                <Filter className="h-5 w-5" /> Sunucu Filtreleri
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-800">
+                  <Filter className="h-5 w-5" /> Sunucu Filtreleri
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setMinimizedServerFilters(v => !v)}
+                  className={`px-2 py-1 text-xs rounded-md border bg-gray-100 text-gray-700 hover:bg-gray-200`}
+                  title={minimizedServerFilters ? 'Maksimize' : 'Minimize'}
+                >
+                  {minimizedServerFilters ? 'Göster' : 'Gizle'}
+                </button>
+              </div>
               {isAdminOrSuper && (
                 <div className="flex gap-2">
                   <button
@@ -1919,9 +1944,9 @@ export default function ReportDetailPage() {
             </div>
 
             {/* Atanmış filtrelerin giriş alanları */}
-            {assignedFilters.length === 0 ? (
+            {!minimizedServerFilters && assignedFilters.length === 0 ? (
               <div className="text-sm text-gray-500">Bu rapora henüz filtre atanmadı.</div>
-            ) : (
+            ) : !minimizedServerFilters ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {assignedFilters.map((af: any) => {
                   const key = af.content?.param || af.content?.params?.start || af.filter_name;
@@ -1930,47 +1955,122 @@ export default function ReportDetailPage() {
                     <div key={`${af.filter_id}-${key}`} className="p-4 border border-gray-200 rounded-lg">
                       <div className="text-sm font-medium text-gray-700 mb-2">{af.filter_name}</div>
                       {type === 'select' && (
-                        <select
-                          multiple={!!af.content?.multiple}
-                          value={serverFilterParams[af.content?.param] || (af.content?.multiple ? [] : '')}
-                          onChange={(e) => {
-                            if (af.content?.multiple) {
-                              const vals = Array.from(e.target.selectedOptions).map(o => (o as HTMLOptionElement).value);
-                              updateServerFilterParam(af.content.param, vals.map(v => isNaN(Number(v)) ? v : Number(v)));
-                            } else {
-                              const v = e.target.value;
-                              updateServerFilterParam(af.content.param, isNaN(Number(v)) ? v : Number(v));
-                            }
-                          }}
-                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                        >
-                          {!af.content?.multiple && <option value="">Seçiniz</option>}
-                          {(af.content?.options || []).map((opt: any) => (
-                            <option key={opt.id} value={opt.id}>{opt.name}</option>
-                          ))}
-                        </select>
+                        <div className="space-y-2">
+                          {/* Tümünü Seç checkbox'ı */}
+                          {Array.isArray(af.content?.options) && af.content.options.length > 0 && (
+                            <label className="flex items-center gap-2 text-sm text-gray-700">
+                              {(() => {
+                                const allIds = af.content.options.map((o: any) => (isNaN(Number(o.id)) ? o.id : Number(o.id)));
+                                const currentVal = serverFilterParams[af.content?.param];
+                                const selected: any[] = Array.isArray(currentVal)
+                                  ? currentVal
+                                  : (currentVal !== undefined && currentVal !== '' && currentVal !== null) ? [currentVal] : [];
+                                const allSelected = selected.length > 0 && selected.length === allIds.length;
+                                return (
+                                  <input
+                                    type="checkbox"
+                                    checked={allSelected}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        updateServerFilterParam(af.content.param, allIds);
+                                      } else {
+                                        updateServerFilterParam(af.content.param, []);
+                                      }
+                                    }}
+                                  />
+                                );
+                              })()}
+                              <span>Tümünü Seç</span>
+                            </label>
+                          )}
+
+                          {/* Seçenekler - checkbox listesi */}
+                          <div className="max-h-44 overflow-auto rounded border border-gray-200 p-2 bg-white">
+                            {(af.content?.options || []).map((opt: any) => {
+                              const idVal: any = isNaN(Number(opt.id)) ? opt.id : Number(opt.id);
+                              const currentVal = serverFilterParams[af.content?.param];
+                              const selectedArr: any[] = Array.isArray(currentVal)
+                                ? currentVal
+                                : (currentVal !== undefined && currentVal !== '' && currentVal !== null) ? [currentVal] : [];
+                              const isChecked = selectedArr.includes(idVal);
+                              return (
+                                <label key={opt.id} className="flex items-center gap-2 text-sm text-gray-700 py-1">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      if (af.content?.multiple !== false) {
+                                        // Çoklu seçim varsayılan: dizi olarak yönet
+                                        const next = new Set(selectedArr);
+                                        if (e.target.checked) next.add(idVal); else next.delete(idVal);
+                                        updateServerFilterParam(af.content.param, Array.from(next));
+                                      } else {
+                                        // Tek seçim: yine dizi tut ama yalnızca bir eleman olacak
+                                        updateServerFilterParam(af.content.param, e.target.checked ? [idVal] : []);
+                                      }
+                                    }}
+                                  />
+                                  <span className="truncate">{opt.name}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
                       )}
                       {type === 'date_range' && (
-                        <div className="flex gap-2">
-                          <input
-                            type="date"
-                            value={serverFilterParams[af.content?.params?.start] || ''}
-                            onChange={(e) => updateServerFilterParam(af.content?.params?.start, e.target.value)}
-                            className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                          />
-                          <input
-                            type="date"
-                            value={serverFilterParams[af.content?.params?.end] || ''}
-                            onChange={(e) => updateServerFilterParam(af.content?.params?.end, e.target.value)}
-                            className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                          />
+                        <div className="space-y-2">
+                          <div className="flex gap-2">
+                            <input
+                              type="date"
+                              value={serverFilterParams[af.content?.params?.start] || ''}
+                              onChange={(e) => updateServerFilterParam(af.content?.params?.start, e.target.value)}
+                              className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                            />
+                            <input
+                              type="date"
+                              value={serverFilterParams[af.content?.params?.end] || ''}
+                              onChange={(e) => updateServerFilterParam(af.content?.params?.end, e.target.value)}
+                              className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                            />
+                          </div>
+
+                          {/* Hızlı tarih butonları */}
+                          <div className="flex flex-wrap gap-2">
+                            {(() => {
+                              const startKey = af.content?.params?.start;
+                              const endKey = af.content?.params?.end;
+                              const applyRange = (start: Date, end: Date) => {
+                                updateServerFilterParam(startKey, formatDateYMD(start));
+                                updateServerFilterParam(endKey, formatDateYMD(end));
+                              };
+                              const today = new Date();
+                              const buttons = [
+                                { label: 'Bu Ay', fn: () => applyRange(new Date(today.getFullYear(), today.getMonth(), 1), today) },
+                                { label: 'Son 1 Hafta', fn: () => { const s = new Date(today); s.setDate(s.getDate() - 7); applyRange(s, today); } },
+                                { label: 'Son 1 Ay', fn: () => { const s = new Date(today); s.setMonth(s.getMonth() - 1); applyRange(s, today); } },
+                                { label: 'Son 3 Ay', fn: () => { const s = new Date(today); s.setMonth(s.getMonth() - 3); applyRange(s, today); } },
+                                { label: 'Son 6 Ay', fn: () => { const s = new Date(today); s.setMonth(s.getMonth() - 6); applyRange(s, today); } },
+                                { label: 'Son 1 Yıl', fn: () => { const s = new Date(today); s.setFullYear(s.getFullYear() - 1); applyRange(s, today); } },
+                              ];
+                              return buttons.map((b) => (
+                                <button
+                                  key={b.label}
+                                  type="button"
+                                  onClick={b.fn}
+                                  className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-md border border-gray-200"
+                                >
+                                  {b.label}
+                                </button>
+                              ));
+                            })()}
+                          </div>
                         </div>
                       )}
                     </div>
                   );
                 })}
               </div>
-            )}
+            ) : null}
 
             {/* Filtre Ekle Modalı */}
             {showAddFilterModal && (

@@ -21,6 +21,8 @@ export default function RootLayout({
         <div className="min-h-screen bg-gray-50">
           {children}
         </div>
+        {/* Overlay/Portal kökü */}
+        <div id="portal-root" />
       </body>
     </html>
   );

@@ -21,6 +21,24 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Loading overlay custom animations */
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes spin-fast {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
+}
+@keyframes pulse-glow {
+  0%, 100% { text-shadow: 0 0 6px rgba(255,255,255,0.15); opacity: .9; }
+  50% { text-shadow: 0 0 18px rgba(255,255,255,0.45); opacity: 1; }
+}
+
+.animate-spin-slow { animation: spin-slow 2.8s linear infinite; }
+.animate-spin-fast { animation: spin-fast 1.2s linear infinite; }
+.animate-pulse-glow { animation: pulse-glow 2.2s ease-in-out infinite; }
+
 /* Input field stilleri - tüm projede geçerli */
 input, textarea, select {
   color: #000000 !important;
