@@ -86,15 +86,39 @@ export default function DatabasePage() {
   
   const loadSavedConnections = async () => {
     setLoadingConnections(true);
+    
+    // Debug: authentication durumunu kontrol et
+    const getCookie = (name: string) => {
+      if (typeof document === 'undefined') return null;
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop()?.split(';').shift();
+      return null;
+    };
+    
+    const token = getCookie('token');
+    const role = getCookie('role');
+    
+    console.log('🔍 Database Page - Authentication Debug:', {
+      hasToken: !!token,
+      hasRole: !!role,
+      roleValue: role,
+      allCookies: document.cookie
+    });
+    
     try {
       const response = await apiGet('http://localhost:5000/api/admin/database-connections');
       const data = await response.json();
       
       if (data.success && data.connections) {
         setSavedConnections(data.connections);
+      } else {
+        console.error('❌ API yanıtı başarısız:', response.status, response.statusText);
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ Hata detayı:', errorData);
       }
     } catch (error) {
-      console.error('Kayıtlı bağlantılar yüklenirken hata:', error);
+      console.error('❌ Kayıtlı bağlantılar yüklenirken hata:', error);
     } finally {
       setLoadingConnections(false);
     }
@@ -124,8 +148,38 @@ export default function DatabasePage() {
 
   // Sayfa yüklendiğinde kayıtlı bağlantıları ve sorguları da yükle
   useEffect(() => {
-    loadSavedConnections();
-    loadSavedQueries(); // Sayfa yüklendiğinde kayıtlı sorguları yükle
+    // Authentication durumunu kontrol et
+    const checkAuthAndLoad = async () => {
+      const getCookie = (name: string) => {
+        if (typeof document === 'undefined') return null;
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop()?.split(';').shift();
+        return null;
+      };
+      
+      const token = getCookie('token');
+      const role = getCookie('role');
+      
+      console.log('🔍 Database Page - useEffect Auth Check:', {
+        hasToken: !!token,
+        hasRole: !!role,
+        roleValue: role
+      });
+      
+      // Cookie'ler hazır olana kadar bekle
+      if (!token || !role) {
+        console.log('⏳ Cookie\'ler henüz hazır değil, 1 saniye bekleniyor...');
+        setTimeout(checkAuthAndLoad, 1000);
+        return;
+      }
+      
+      console.log('✅ Cookie\'ler hazır, veriler yükleniyor...');
+      loadSavedConnections();
+      loadSavedQueries();
+    };
+    
+    checkAuthAndLoad();
   }, []);
 
   // Sayfa yüklendiğinde kayıtlı ayarları yükle
@@ -305,18 +359,14 @@ export default function DatabasePage() {
         return;
       }
       
-      const response = await fetch('http://localhost:5000/api/admin/database/query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: sqlQuery,
-          host: connection.host,
-          port: parseInt(connection.port),
-          database: connection.database_name,
-          username: connection.username,
-          password: config.password,
-          type: connection.type
-        })
+      const response = await apiPost('http://localhost:5000/api/admin/database/query', {
+        query: sqlQuery,
+        host: connection.host,
+        port: parseInt(connection.port),
+        database: connection.database_name,
+        username: connection.username,
+        password: config.password,
+        type: connection.type
       });
       
       const data = await response.json();
@@ -338,15 +388,11 @@ export default function DatabasePage() {
     if (!saveForm.name.trim() || !sqlQuery.trim()) return;
     
     try {
-      const response = await fetch('http://localhost:5000/api/admin/database/save-query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...saveForm,
-          query: sqlQuery,
-          created_by: 'admin'
-          // Artık config parametreleri gönderilmiyor, doğrudan PostgreSQL kullanılıyor
-        })
+      const response = await apiPost('http://localhost:5000/api/admin/database/save-query', {
+        ...saveForm,
+        sql_query: sqlQuery,
+        created_by: 'admin'
+        // Artık config parametreleri gönderilmiyor, doğrudan PostgreSQL kullanılıyor
       });
       
       const data = await response.json();

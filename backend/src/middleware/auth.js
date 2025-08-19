@@ -4,6 +4,20 @@ const pool = require('../config/database');
 // JWT token doğrulama middleware'i
 const authenticateToken = async (req, res, next) => {
   try {
+    // Debug: Tüm cookie'leri ve header'ları logla
+    console.log('🔍 Auth Middleware Debug:', {
+      method: req.method,
+      url: req.url,
+      cookies: req.cookies,
+      headers: req.headers,
+      hasCookieToken: !!req.cookies?.token,
+      hasAuthHeader: !!req.headers['authorization'],
+      cookieNames: Object.keys(req.cookies || {}),
+      allHeaders: Object.keys(req.headers),
+      contentType: req.headers['content-type'],
+      origin: req.headers['origin']
+    });
+    
     // Öncelikle HttpOnly cookie'den token'ı al
     let token = req.cookies?.token;
     
@@ -14,10 +28,12 @@ const authenticateToken = async (req, res, next) => {
     }
 
     console.log('🔍 Auth Middleware:', {
+      method: req.method,
       hasCookieToken: !!req.cookies?.token,
       hasAuthHeader: !!req.headers['authorization'],
       tokenLength: token ? token.length : 0,
-      tokenStart: token ? token.substring(0, 20) + '...' : 'none'
+      tokenStart: token ? token.substring(0, 20) + '...' : 'none',
+      finalToken: token ? 'EXISTS' : 'MISSING'
     });
 
     if (!token) {

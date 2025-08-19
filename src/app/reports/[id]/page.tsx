@@ -94,6 +94,7 @@ export default function ReportDetailPage() {
   const [executing, setExecuting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingConnection, setLoadingConnection] = useState(false);
+  const [userRole, setUserRole] = useState<string>('user'); // Kullanıcı rolü
   
   // Grafik ve filtreleme state'leri
   const [chartConfig, setChartConfig] = useState<ChartConfig | null>(null);
@@ -106,18 +107,43 @@ export default function ReportDetailPage() {
   const [showChart, setShowChart] = useState(true);
   const [showChartSuggestions, setShowChartSuggestions] = useState(false);
   const [showAdvancedChartConfig, setShowAdvancedChartConfig] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [initialChartConfig, setInitialChartConfig] = useState<any | null>(null);
   const [role, setRole] = useState<string | null>(null);
-  const isAdminOrSuper = role === '1' || role === '2' || role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'admin' || role === 'superadmin';
+  // Daha kapsamlı admin kontrolü
+  const isAdminOrSuper = (
+    role === '1' || role === '2' ||
+    role === 'ADMIN' || role === 'SUPER_ADMIN' ||
+    role === 'admin' || role === 'superadmin' ||
+    userRole === 'admin' || userRole === 'superadmin' || userRole === 'SUPER_ADMIN'
+  );
 
   // Minimize/maximize state'leri
   const [minimizedSuggestions, setMinimizedSuggestions] = useState(false);
-  const [minimizedDataTable, setMinimizedDataTable] = useState(false);
+  const [minimizedDataTable, setMinimizedDataTable] = useState(true);
+  const [allChartConfigs, setAllChartConfigs] = useState<any[]>([]);
 
   useEffect(() => {
     if (params.id) {
       loadSavedQuery(params.id as string);
+      loadUserRole();
     }
   }, [params.id]);
+
+  // Kullanıcı rolünü yükle
+  const loadUserRole = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        // JWT token'dan rol bilgisini çıkar (basit decode)
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setUserRole(payload.role || 'user');
+      }
+    } catch (error) {
+      console.log('Kullanıcı rolü yüklenemedi, varsayılan: user');
+      setUserRole('user');
+    }
+  };
 
   // Cookie'den rol oku
   useEffect(() => {
@@ -127,7 +153,7 @@ export default function ReportDetailPage() {
     }
   }, []);
 
-  // Sayfa açılışında varsayılan grafik konfigürasyonunu yükle
+  // Sayfa açılışında varsayılan grafik konfigürasyonunu yükle (önce belleğe al)
   useEffect(() => {
     const fetchConfig = async () => {
       try {
@@ -135,15 +161,7 @@ export default function ReportDetailPage() {
         const res = await apiGet(`http://localhost:5000/api/reports/${params.id}/chart-config`);
         const data = await res.json();
         if (data.success && data.config) {
-          const cfg = data.config;
-          const advCfg = createAdvancedChartConfig(cfg.chart_type, cfg.x_axis, cfg.y_axis);
-          if (advCfg) {
-            advCfg.aggregation = cfg.aggregation;
-            advCfg.sortBy = cfg.sort_by;
-            advCfg.groupBy = cfg.group_by || cfg.x_axis;
-            setAdvancedChartConfig(advCfg);
-            setSelectedChartType(cfg.chart_type);
-          }
+          setInitialChartConfig(data.config);
         }
       } catch (e) {
         // sessiz geç
@@ -151,6 +169,23 @@ export default function ReportDetailPage() {
     };
     fetchConfig();
   }, [params.id]);
+
+  // Tüm grafik konfigürasyonlarını yükle (okuma tüm kullanıcılar için serbest)
+  useEffect(() => {
+    const loadAllConfigs = async () => {
+      try {
+        if (!params.id) return;
+        const res = await apiGet(`http://localhost:5000/api/reports/${params.id}/chart-configs`);
+        const data = await res.json();
+        if (data.success && Array.isArray(data.configs)) {
+          setAllChartConfigs(data.configs);
+        }
+      } catch {}
+    };
+    loadAllConfigs();
+  }, [params.id]);
+
+  // analyzeData tanımından sonra taşındı
 
   // Veri analizi ve grafik konfigürasyonu
   const analyzeData = useMemo(() => {
@@ -362,6 +397,21 @@ export default function ReportDetailPage() {
     return filtered;
   }, [queryResult?.results, filters, multiSelectFilters, analyzeData]);
 
+  // Veri analizi hazır olduğunda başlangıç konfigini uygula
+  useEffect(() => {
+    if (!advancedChartConfig && initialChartConfig && analyzeData) {
+      const cfg = initialChartConfig;
+      const advCfg = createAdvancedChartConfig(cfg.chart_type, cfg.x_axis, cfg.y_axis);
+      if (advCfg) {
+        advCfg.aggregation = cfg.aggregation;
+        advCfg.sortBy = cfg.sort_by;
+        advCfg.groupBy = cfg.group_by || cfg.x_axis;
+        setAdvancedChartConfig(advCfg);
+        setSelectedChartType(cfg.chart_type);
+      }
+    }
+  }, [advancedChartConfig, initialChartConfig, analyzeData]);
+
   // filteredData'yı güncelle
   useEffect(() => {
     setFilteredData(applyFilters);
@@ -468,6 +518,65 @@ export default function ReportDetailPage() {
     }
 
     return chartData.slice(0, 20); // En fazla 20 veri
+  };
+
+  // Kayıtlı grafik konfigürasyonu için veri hazırla (çoklu render desteği)
+  const prepareChartDataForConfig = (cfg: any) => {
+    if (!cfg || !filteredData.length) return null;
+
+    const xAxisKey = cfg.group_by || cfg.x_axis;
+    const yAxisKey = cfg.y_axis;
+    const aggregation: 'sum' | 'count' | 'average' | 'min' | 'max' = cfg.aggregation || 'sum';
+    const sortBy: 'asc' | 'desc' = cfg.sort_by || 'desc';
+
+    const grouped = new Map<string, { count: number; sum: number; values: number[] }>();
+
+    filteredData.forEach((item: any) => {
+      const groupKey = item[xAxisKey];
+      const rawValue = item[yAxisKey];
+      const numericValue = Number(rawValue);
+
+      if (!grouped.has(groupKey)) {
+        grouped.set(String(groupKey), { count: 0, sum: 0, values: [] });
+      }
+
+      const g = grouped.get(String(groupKey))!;
+      g.count += 1;
+      if (!Number.isNaN(numericValue)) {
+        g.sum += numericValue;
+        g.values.push(numericValue);
+      }
+    });
+
+    const data = Array.from(grouped.entries()).map(([key, g]) => {
+      let value = 0;
+      switch (aggregation) {
+        case 'count':
+          value = g.count;
+          break;
+        case 'average':
+          value = g.count > 0 ? g.sum / g.count : 0;
+          break;
+        case 'min':
+          value = g.values.length ? Math.min(...g.values) : 0;
+          break;
+        case 'max':
+          value = g.values.length ? Math.max(...g.values) : 0;
+          break;
+        default:
+          value = g.sum;
+      }
+      return { label: String(key).substring(0, 20), value, count: g.count };
+    });
+
+    data.sort((a, b) => (sortBy === 'asc' ? a.value - b.value : b.value - a.value));
+    return data.slice(0, 30);
+  };
+
+  const mapChartType = (t: string): 'bar' | 'line' | 'pie' => {
+    if (t === 'line') return 'line';
+    if (t === 'pie') return 'pie';
+    return 'bar';
   };
 
   // Çoklu seçim filtre ekleme/çıkarma
@@ -739,7 +848,7 @@ export default function ReportDetailPage() {
 
   const loadSavedQuery = async (id: string) => {
     try {
-      const response = await apiGet('http://localhost:5000/api/admin/database/save-query');
+      const response = await apiGet('http://localhost:5000/api/reports/public-queries');
       const data = await response.json();
       
       if (data.success) {
@@ -763,16 +872,54 @@ export default function ReportDetailPage() {
     setError(null);
     
     try {
+      // Önce public endpoint'i dene
+      try {
+        const publicResponse = await apiPost(`http://localhost:5000/api/reports/run/${query.id}`, {});
+        const publicData = await publicResponse.json();
+        
+        if (publicData.success) {
+          setQueryResult({
+            success: true,
+            results: publicData.results || [],
+            message: publicData.message || 'Rapor başarıyla çalıştırıldı'
+          });
+          setLoadingConnection(false);
+          setExecuting(false);
+          // Grafik konfigürasyonunu ayarla
+          setTimeout(() => {
+            if (analyzeData?.suggestedChart) {
+              setChartConfig(analyzeData.suggestedChart);
+              setSelectedChartType(analyzeData.suggestedChart.type);
+            }
+          }, 100);
+          return;
+        }
+      } catch (publicError) {
+        console.log('Public endpoint başarısız, admin endpoint deneniyor...');
+        // Admin olmayan kullanıcılar için admin fallback çağrısını durdur
+        if (!isAdminOrSuper) {
+          setError('Rapor şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin.');
+          setExecuting(false);
+          return;
+        }
+      }
+
+      // Fallback: Admin endpoint'i dene
       setLoadingConnection(true);
       const connectionResponse = await apiGet('http://localhost:5000/api/admin/database-connections');
       const connectionData = await connectionResponse.json();
       
-      if (!connectionData.success || connectionData.connections.length === 0) {
-        setError('Aktif veritabanı bağlantısı bulunamadı. Lütfen admin sayfasından bağlantı ekleyin.');
-        setExecuting(false);
-        setLoadingConnection(false);
-        return;
-      }
+             if (!connectionData.success || connectionData.connections.length === 0) {
+         // Normal kullanıcılar için admin mesajı gösterme
+         if (isAdminOrSuper) {
+           setError('Aktif veritabanı bağlantısı bulunamadı. Lütfen admin sayfasından bağlantı ekleyin.');
+         } else {
+           setError('Rapor şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin veya sistem yöneticisi ile iletişime geçin.');
+         }
+         setExecuting(false);
+         setLoadingConnection(false);
+         return;
+       }
       
       const connection = connectionData.connections[0];
       setLoadingConnection(false);
@@ -867,9 +1014,9 @@ export default function ReportDetailPage() {
             <h3 className="text-lg font-semibold mb-4 text-gray-800">Bar Grafik - {yAxis} vs {xAxis}</h3>
             <div className="h-64 flex items-end justify-center space-x-3 relative overflow-x-auto">
               {/* Y ekseni etiketleri */}
-              <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-xs text-gray-500 pr-2">
+              <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-xs text-gray-700 pr-2 bg-white bg-opacity-80 rounded-r px-1">
                 {[0, 25, 50, 75, 100].map(percent => (
-                  <span key={percent} className="transform -translate-y-1/2">
+                  <span key={percent} className="transform -translate-y-1/2 font-medium">
                     {Math.round((maxBarValue * percent) / 100)}
                   </span>
                 ))}
@@ -878,7 +1025,7 @@ export default function ReportDetailPage() {
               {/* Grid çizgileri */}
               <div className="absolute inset-0 flex flex-col justify-between">
                 {[0, 25, 50, 75, 100].map(percent => (
-                  <div key={percent} className="border-t border-gray-200 w-full"></div>
+                  <div key={percent} className="border-t border-gray-100 w-full opacity-30"></div>
                 ))}
               </div>
               
@@ -893,12 +1040,12 @@ export default function ReportDetailPage() {
                   return (
                     <div key={index} className="flex flex-col items-center relative group">
                       {/* Tooltip */}
-                      <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                      <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-3 py-2 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10 border border-gray-600">
                         <div className="text-center">
-                          <div className="font-semibold">{label}</div>
-                          <div>{value} ({percentage.toFixed(1)}%)</div>
+                          <div className="font-semibold text-white">{label}</div>
+                          <div className="text-gray-200">{value} ({percentage.toFixed(1)}%)</div>
                         </div>
-                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
                       </div>
                       
                       {/* Bar */}
@@ -915,7 +1062,7 @@ export default function ReportDetailPage() {
                         </div>
                         
                         {/* Değer etiketi */}
-                        <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 text-xs font-bold text-gray-700 bg-white px-2 py-1 rounded shadow-sm border border-gray-200">
+                        <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 text-xs font-bold text-gray-800 bg-white bg-opacity-95 px-2 py-1 rounded shadow-lg border border-gray-300 backdrop-blur-sm">
                           {value}
                         </div>
                       </div>
@@ -923,7 +1070,7 @@ export default function ReportDetailPage() {
                       {/* X ekseni etiketi */}
                       <div className="mt-3 text-center">
                         <span 
-                          className="text-xs text-gray-600 font-medium leading-tight block max-w-20 truncate" 
+                          className="text-xs text-gray-800 font-semibold leading-tight block max-w-20 truncate bg-white bg-opacity-90 px-1 py-0.5 rounded" 
                           title={label}
                           style={{
                             transform: 'rotate(-45deg)',
@@ -952,9 +1099,9 @@ export default function ReportDetailPage() {
             <h3 className="text-lg font-semibold mb-4 text-gray-800">Çizgi Grafik - {yAxis} Trendi</h3>
             <div className="h-64 flex items-center justify-center relative">
               {/* Y ekseni etiketleri */}
-              <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-xs text-gray-500 pr-2">
+              <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-xs text-gray-700 pr-2 bg-white bg-opacity-80 rounded-r px-1">
                 {[0, 25, 50, 75, 100].map(percent => (
-                  <span key={percent} className="transform -translate-y-1/2">
+                  <span key={percent} className="transform -translate-y-1/2 font-medium">
                     {Math.round((maxLineValue * percent) / 100)}
                   </span>
                 ))}
@@ -963,7 +1110,7 @@ export default function ReportDetailPage() {
               {/* Grid çizgileri */}
               <div className="absolute inset-0 flex flex-col justify-between">
                 {[0, 25, 50, 75, 100].map(percent => (
-                  <div key={percent} className="border-t border-gray-200 w-full"></div>
+                  <div key={percent} className="border-t border-gray-100 w-full opacity-30"></div>
                 ))}
               </div>
               
@@ -1287,9 +1434,9 @@ export default function ReportDetailPage() {
             <h3 className="text-lg font-semibold mb-4 text-gray-800">Alan Grafik - {yAxis} Trendi</h3>
             <div className="h-64 flex items-center justify-center relative">
               {/* Y ekseni etiketleri */}
-              <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-xs text-gray-500 pr-2">
+              <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-xs text-gray-700 pr-2 bg-white bg-opacity-80 rounded-r px-1">
                 {[0, 25, 50, 75, 100].map(percent => (
-                  <span key={percent} className="transform -translate-y-1/2">
+                  <span key={percent} className="transform -translate-y-1/2 font-medium">
                     {Math.round((maxAreaValue * percent) / 100)}
                   </span>
                 ))}
@@ -1298,7 +1445,7 @@ export default function ReportDetailPage() {
               {/* Grid çizgileri */}
               <div className="absolute inset-0 flex flex-col justify-between">
                 {[0, 25, 50, 75, 100].map(percent => (
-                  <div key={percent} className="border-t border-gray-200 w-full"></div>
+                  <div key={percent} className="border-t border-gray-100 w-full opacity-30"></div>
                 ))}
               </div>
               
@@ -1413,8 +1560,8 @@ export default function ReportDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-[1400px] mx-auto">
+    <div className="min-h-screen bg-gray-50 p-4 overflow-x-hidden">
+      <div className="w-full max-w-none transform-gpu">
         {/* Header */}
         <div className="bg-white rounded-xl shadow-sm p-6 mb-6 border border-gray-100">
           <div className="flex items-center justify-between">
@@ -1478,6 +1625,7 @@ export default function ReportDetailPage() {
                 {showFilters ? '✔ Filtreler' : 'Filtreler'}
               </button>
 
+              {/* Kaydet */}
               {isAdminOrSuper && (
                 <button
                   onClick={async () => {
@@ -1486,8 +1634,9 @@ export default function ReportDetailPage() {
                         alert('Önce grafik ayarlarını seçin');
                         return;
                       }
+                      const timeSuffix = new Date().toLocaleString('tr-TR', { hour: '2-digit', minute: '2-digit' });
                       const payload = {
-                        name: 'Varsayılan Grafik',
+                        name: `Grafik ${timeSuffix}`,
                         chart_type: advancedChartConfig.type,
                         x_axis: advancedChartConfig.xAxis,
                         y_axis: advancedChartConfig.yAxis,
@@ -1506,6 +1655,13 @@ export default function ReportDetailPage() {
                       const data = await res.json();
                       if (!res.ok || !data.success) throw new Error(data.message || 'Kaydedilemedi');
                       alert('Grafik konfigürasyonu kaydedildi');
+                      setIsEditMode(false);
+                      // listeyi yenile
+                      try {
+                        const listRes = await apiGet(`http://localhost:5000/api/reports/${params.id}/chart-configs`);
+                        const listData = await listRes.json();
+                        if (listData.success) setAllChartConfigs(listData.configs || []);
+                      } catch {}
                     } catch (err: any) {
                       alert(`Kaydetme hatası: ${err.message}`);
                     }
@@ -1513,7 +1669,22 @@ export default function ReportDetailPage() {
                   className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
                 >
                   <CheckCircle className="h-4 w-4" />
-                  Grafiği Kaydet (Admin)
+                  Grafik Ekle / Kaydet
+                </button>
+              )}
+
+              {/* Gelişmiş Ayarlar toggle: sadece edit modunda göster */}
+              {isAdminOrSuper && (
+                <button
+                  onClick={() => setShowAdvancedChartConfig(prev => !prev)}
+                  className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                    isEditMode && showAdvancedChartConfig
+                      ? 'bg-purple-600 text-white hover:bg-purple-700'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <Settings className="h-4 w-4" />
+                  Gelişmiş Ayarlar
                 </button>
               )}
 
@@ -1536,12 +1707,27 @@ export default function ReportDetailPage() {
                 {showChart ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                 {showChart ? 'Grafik Göster' : 'Grafik Gizle'}
               </button>
+
+              {isAdminOrSuper && (
+                <button
+                  onClick={() => setIsEditMode(prev => !prev)}
+                  className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                    isEditMode 
+                      ? 'bg-indigo-600 text-white hover:bg-indigo-700' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                  title="Grafik ayarlarını düzenle"
+                >
+                  <Settings className="h-4 w-4" />
+                  {isEditMode ? 'Düzenlemeyi Kapat' : 'Grafik Ekle / Düzenle'}
+                </button>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Grafik Önerileri */}
-        {showChartSuggestions && analyzeData && (
+        {/* Grafik Önerileri (sadece edit modunda) */}
+        {isEditMode && showChartSuggestions && analyzeData && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-6">
             {/* Header with minimize button */}
             <div className="p-5 border-b border-gray-100">
@@ -1837,8 +2023,8 @@ export default function ReportDetailPage() {
           </div>
         )}
 
-        {/* Grafik Türü Seçimi */}
-        {analyzeData && showChart && (
+        {/* Grafik Türü Seçimi (sadece edit modunda) */}
+        {isEditMode && analyzeData && showChart && (
           <div className="bg-white rounded-xl shadow-sm p-5 mb-6 border border-gray-100">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-800">Grafik Türü</h3>
@@ -1883,9 +2069,9 @@ export default function ReportDetailPage() {
           </div>
         )}
 
-        {/* Gelişmiş Grafik Konfigürasyonu */}
-        {showAdvancedChartConfig && analyzeData && (
-          <div className="bg-white rounded-xl shadow-sm p-5 mb-6 border border-gray-100">
+        {/* Gelişmiş Grafik Konfigürasyonu (sadece edit modunda) */}
+        {isEditMode && showAdvancedChartConfig && analyzeData && (
+          <div className="bg-white rounded-xl shadow-sm p-5 mb-6 border border-gray-100 showAdvancedChartConfig">
             <h3 className="text-lg font-semibold mb-4 text-gray-800 flex items-center gap-2">
               <Settings className="h-5 w-5 text-purple-600" />
               Gelişmiş Grafik Ayarları
@@ -2006,42 +2192,231 @@ export default function ReportDetailPage() {
                 </select>
               </div>
 
-              {/* Uygula Butonu */}
-              <div className="md:col-span-2 lg:col-span-3">
-                <button
-                  onClick={() => {
-                    if (advancedChartConfig?.xAxis && advancedChartConfig?.yAxis) {
-                      setShowAdvancedChartConfig(false);
-                    } else {
-                      alert('Lütfen X ve Y eksenlerini seçin!');
-                    }
-                  }}
-                  disabled={!advancedChartConfig?.xAxis || !advancedChartConfig?.yAxis}
-                  className="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                >
-                  ✅ Grafiği Uygula
-                </button>
-              </div>
+                             {/* Uygula Butonu */}
+               <div className="md:col-span-2 lg:col-span-3 flex gap-3">
+                 <button
+                   onClick={() => {
+                     if (advancedChartConfig?.xAxis && advancedChartConfig?.yAxis) {
+                       setShowAdvancedChartConfig(false);
+                     } else {
+                       alert('Lütfen X ve Y eksenlerini seçin!');
+                     }
+                   }}
+                   disabled={!advancedChartConfig?.xAxis || !advancedChartConfig?.yAxis}
+                   className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                 >
+                   ✅ Grafiği Uygula
+                 </button>
+                 
+                 {/* Güncelleme Butonu - sadece düzenleme modunda göster */}
+                 {isEditMode && (
+                   <button
+                     onClick={async () => {
+                       try {
+                         if (!advancedChartConfig) {
+                           alert('Önce grafik ayarlarını seçin');
+                           return;
+                         }
+                         
+                         // Mevcut grafik ID'sini bul (düzenlenen grafik)
+                         const currentConfig = allChartConfigs.find(cfg => 
+                           cfg.x_axis === advancedChartConfig.xAxis && 
+                           cfg.y_axis === advancedChartConfig.yAxis &&
+                           cfg.chart_type === advancedChartConfig.type
+                         );
+                         
+                         if (!currentConfig) {
+                           alert('Güncellenecek grafik bulunamadı');
+                           return;
+                         }
+                         
+                         const payload = {
+                           name: currentConfig.name,
+                           chart_type: advancedChartConfig.type,
+                           x_axis: advancedChartConfig.xAxis,
+                           y_axis: advancedChartConfig.yAxis,
+                           x_axis_type: advancedChartConfig.xAxisType,
+                           y_axis_type: advancedChartConfig.yAxisType,
+                           series: advancedChartConfig.series,
+                           aggregation: advancedChartConfig.aggregation,
+                           sort_by: advancedChartConfig.sortBy,
+                           group_by: advancedChartConfig.groupBy,
+                           height: currentConfig.height || 520,
+                           chart_options: currentConfig.chart_options || {},
+                           filters: filters,
+                           is_default: currentConfig.is_default || false
+                         };
+                         
+                         const res = await fetch(`http://localhost:5000/api/reports/${params.id}/chart-config/${currentConfig.id}`, {
+                           method: 'PUT',
+                           headers: {
+                             'Content-Type': 'application/json'
+                           },
+                           credentials: 'include',
+                           body: JSON.stringify(payload)
+                         });
+                         
+                         if (res.ok) {
+                           // Listeyi yenile
+                           const listRes = await fetch(`http://localhost:5000/api/reports/${params.id}/chart-configs`, {
+                             method: 'GET',
+                             credentials: 'include'
+                           });
+                           const listData = await listRes.json();
+                           if (listData.success) {
+                             setAllChartConfigs(listData.configs || []);
+                             alert('Grafik başarıyla güncellendi!');
+                           }
+                         } else {
+                           const errorData = await res.json();
+                           alert(`Grafik güncellenirken hata oluştu: ${errorData.message || 'Bilinmeyen hata'}`);
+                         }
+                       } catch (error) {
+                         console.error('Grafik güncelleme hatası:', error);
+                         alert('Grafik güncellenirken hata oluştu!');
+                       }
+                     }}
+                     disabled={!advancedChartConfig?.xAxis || !advancedChartConfig?.yAxis}
+                     className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                   >
+                     🔄 Grafiği Güncelle
+                   </button>
+                 )}
+               </div>
             </div>
           </div>
         )}
 
         {/* Grafik ve Veri */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Grafik */}
+        <div className="grid grid-cols-1 gap-6 transform-gpu will-change-transform">
+          {/* Grafikler Grid */}
           {showChart && (
-            <div className="space-y-5">
-              <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
-                <div data-chart="true" className="chart-container">
-                  {renderChart()}
-                </div>
+            <div className="space-y-6">
+              {/* Tüm kayıtlı grafikler: aktif grafik ilk sırada */}
+              <div className="grid grid-cols-1 gap-6">
+                                 {[...(allChartConfigs || [])].map((cfg: any) => {
+                   const chartData = prepareChartDataForConfig(cfg);
+                   const type = mapChartType(cfg.chart_type);
+                   return (
+                     <div key={cfg.id} className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                       <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                         <span className="text-sm font-medium text-gray-700 truncate">{cfg.name}</span>
+                                                  {/* Edit and delete functionality now handled by ChartCard component */}
+                       </div>
+                       <div className="p-3 transform-gpu will-change-transform">
+                         {chartData && chartData.length > 0 ? (
+                           <ChartCard 
+                             type={type} 
+                             data={chartData} 
+                             title={`${cfg.y_axis} - ${cfg.x_axis}`} 
+                             height={cfg.height || 480}
+                             isEditMode={isAdminOrSuper}
+                             editConfig={cfg}
+                             onSave={async (updatedConfig) => {
+                               try {
+                                 const payload = {
+                                   name: updatedConfig.name || cfg.name,
+                                   chart_type: updatedConfig.chart_type || cfg.chart_type,
+                                   x_axis: updatedConfig.x_axis || cfg.x_axis,
+                                   y_axis: updatedConfig.y_axis || cfg.y_axis,
+                                   x_axis_type: cfg.x_axis_type,
+                                   y_axis_type: cfg.y_axis_type,
+                                   series: cfg.series,
+                                   aggregation: updatedConfig.aggregation || cfg.aggregation,
+                                   sort_by: updatedConfig.sort_by || cfg.sort_by,
+                                   group_by: updatedConfig.group_by || cfg.group_by,
+                                   height: updatedConfig.height || cfg.height || 520,
+                                   chart_options: cfg.chart_options || {},
+                                   filters: filters,
+                                   is_default: cfg.is_default || false
+                                 };
+                                 
+                                 // Mevcut grafik ID'si ile PUT endpoint'ini kullan
+                                 const res = await fetch(`http://localhost:5000/api/reports/${params.id}/chart-config/${cfg.id}`, {
+                                   method: 'PUT',
+                                   headers: {
+                                     'Content-Type': 'application/json'
+                                   },
+                                   credentials: 'include',
+                                   body: JSON.stringify(payload)
+                                 });
+                                 
+                                 if (res.ok) {
+                                   // Listeyi yenile
+                                   const listRes = await fetch(`http://localhost:5000/api/reports/${params.id}/chart-configs`, {
+                                     method: 'GET',
+                                     credentials: 'include'
+                                   });
+                                   const listData = await listRes.json();
+                                   if (listData.success) {
+                                     setAllChartConfigs(listData.configs || []);
+                                     alert('Grafik başarıyla güncellendi!');
+                                   }
+                                 } else {
+                                   const errorData = await res.json();
+                                   alert(`Grafik güncellenirken hata oluştu: ${errorData.message || 'Bilinmeyen hata'}`);
+                                 }
+                               } catch (error) {
+                                 console.error('Grafik güncelleme hatası:', error);
+                                 alert('Grafik güncellenirken hata oluştu!');
+                               }
+                             }}
+                             onCancel={() => {
+                               // Cancel işlemi için gerekirse ek kod
+                             }}
+                             onDelete={async (cfg) => {
+                               try {
+                                 const res = await fetch(`http://localhost:5000/api/reports/chart-config/${cfg.id}`, {
+                                   method: 'DELETE',
+                                   headers: {
+                                     'Content-Type': 'application/json'
+                                   },
+                                   credentials: 'include'
+                                 });
+                                 if (res.ok) {
+                                   // Listeyi yenile
+                                   const listRes = await fetch(`http://localhost:5000/api/reports/${params.id}/chart-configs`, {
+                                     method: 'GET',
+                                     credentials: 'include'
+                                   });
+                                   const listData = await listRes.json();
+                                   if (listData.success) {
+                                     setAllChartConfigs(listData.configs || []);
+                                     alert('Grafik başarıyla silindi!');
+                                   }
+                                 } else {
+                                   alert('Grafik silinirken hata oluştu!');
+                                 }
+                               } catch (error) {
+                                 console.error('Grafik silme hatası:', error);
+                                 alert('Grafik silinirken hata oluştu!');
+                               }
+                             }}
+                           />
+                         ) : (
+                           <div className="h-[480px] flex items-center justify-center text-sm text-gray-500 border border-dashed rounded-md">
+                             Veri bulunamadı
+                           </div>
+                         )}
+                       </div>
+                     </div>
+                   );
+                 })}
+                {/* Eğer hiç kayıtlı yoksa aktif grafiği tek başına göster */}
+                {(!allChartConfigs || allChartConfigs.length === 0) && (
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                    <div data-chart="true" className="chart-container transform-gpu will-change-transform">
+                      {renderChart()}
+                    </div>
+                  </div>
+                )}
               </div>
-              
-              {/* İstatistikler */}
+
+              {/* Özet İstatistikler */}
               {filteredData.length > 0 && (
                 <div className="bg-white p-5 rounded-lg shadow-sm">
                   <h3 className="text-lg font-semibold mb-4 text-gray-800">Özet İstatistikler</h3>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="text-center">
                       <div className="text-2xl font-bold text-blue-600">{filteredData.length}</div>
                       <div className="text-sm text-gray-600">Toplam Kayıt</div>
@@ -2063,8 +2438,8 @@ export default function ReportDetailPage() {
             </div>
           )}
 
-          {/* Veri Tablosu */}
-          <div className={`bg-white rounded-xl shadow-sm border border-gray-100 ${!showChart ? 'lg:col-span-2' : ''}`}>
+          {/* Veri Tablosu - aşağıya geniş blok */}
+          <div className={`bg-white rounded-xl shadow-sm border border-gray-100 2xl:col-span-2`}>
             {/* Header with minimize button */}
             <div className="p-5 border-b border-gray-100">
               <div className="flex items-center justify-between">
@@ -2091,7 +2466,7 @@ export default function ReportDetailPage() {
             {/* Table content - conditionally rendered */}
             {!minimizedDataTable && (
               <>
-                <div className="overflow-x-auto max-w-full">
+                <div className="overflow-x-auto max-w-full transform-gpu will-change-transform">
                   <table className="w-full min-w-max">
                     <thead className="bg-gray-50 sticky top-0 z-10">
                       <tr>

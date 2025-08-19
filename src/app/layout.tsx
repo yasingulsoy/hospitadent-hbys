@@ -5,8 +5,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "HospiTech HBYS",
-  description: "HospiTech Merkezi Yönetim Sistemi - Modern ve kapsamlı hastane yönetim sistemi",
+  title: "HospitaTech BI",
+  description: "HospitaTech Merkezi Yönetim Sistemi - Modern ve kapsamlı hastane yönetim sistemi",
   keywords: "hastane, hbys, yönetim, randevu, hasta, tedavi, rapor",
 };
 

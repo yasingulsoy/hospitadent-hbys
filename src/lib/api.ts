@@ -11,6 +11,15 @@ export const apiRequest = async (url: string, options: RequestInit = {}) => {
 
   const token = getCookie('token');
   
+  // Debug: Cookie durumunu logla
+  console.log('🔍 API Request Debug:', {
+    url,
+    hasToken: !!token,
+    tokenLength: token ? token.length : 0,
+    allCookies: document.cookie,
+    credentials: 'include'
+  });
+  
   // Headers'ı hazırla
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -27,6 +36,8 @@ export const apiRequest = async (url: string, options: RequestInit = {}) => {
     ...options,
     headers,
     credentials: 'include',
+    mode: 'cors',
+    cache: 'no-cache'
   });
 
   // Eğer 401 hatası alırsak, kullanıcıyı login'e yönlendir

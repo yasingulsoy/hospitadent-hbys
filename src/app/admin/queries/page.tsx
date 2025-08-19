@@ -55,15 +55,37 @@ export default function QueriesPage() {
   const loadSavedQueries = async () => {
     try {
       setLoading(true);
+      
+      // Token durumunu debug et
+      const getCookie = (name: string) => {
+        if (typeof document === 'undefined') return null;
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop()?.split(';').shift();
+        return null;
+      };
+      
+      const token = getCookie('token');
+      console.log('🔍 Token durumu:', {
+        hasToken: !!token,
+        tokenLength: token ? token.length : 0,
+        tokenStart: token ? token.substring(0, 20) + '...' : 'none',
+        allCookies: document.cookie
+      });
+      
       const response = await apiGet('http://localhost:5000/api/admin/database/save-query');
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
           setSavedQueries(data.queries || []);
         }
+      } else {
+        console.error('❌ API yanıtı başarısız:', response.status, response.statusText);
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ Hata detayı:', errorData);
       }
     } catch (error) {
-      console.error('Kayıtlı sorgular yüklenirken hata:', error);
+      console.error('❌ Kayıtlı sorgular yüklenirken hata:', error);
     } finally {
       setLoading(false);
     }

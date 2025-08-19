@@ -605,12 +605,39 @@ router.get('/database/save-query', async (req, res) => {
 // Save query endpoint
 router.post('/database/save-query', async (req, res) => {
   try {
-    const { name, description, category, is_public, query } = req.body;
+    // Debug: gelen veriyi detaylı logla
+    console.log('🔍 Save Query Request Body:', JSON.stringify(req.body, null, 2));
+    console.log('🔍 Request Body Keys:', Object.keys(req.body));
+    console.log('🔍 Content-Type:', req.headers['content-type']);
+    
+    const { name, description, category, is_public, sql_query } = req.body;
+    
+    console.log('🔍 Destructured Fields:', {
+      name: name,
+      description: description,
+      category: category,
+      is_public: is_public,
+      sql_query: sql_query,
+      sql_query_type: typeof sql_query,
+      sql_query_length: sql_query ? sql_query.length : 'null'
+    });
+    
+    if (!sql_query || !sql_query.trim()) {
+      console.log('❌ SQL Query validation failed:', { sql_query, trimmed: sql_query ? sql_query.trim() : 'null' });
+      return res.status(400).json({
+        success: false,
+        message: 'SQL sorgusu boş olamaz'
+      });
+    }
+    
+    console.log('✅ SQL Query validation passed, inserting into database...');
     
     const result = await pool.query(
       'INSERT INTO saved_queries (name, description, sql_query, category, is_public, created_by, usage_count, last_run) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
-      [name, description, query, category, is_public, 'admin', 0, null]
+      [name, description, sql_query, category, is_public, 'admin', 0, null]
     );
+    
+    console.log('✅ Database insert successful:', result.rows[0]);
     
     res.json({
       success: true,
@@ -619,7 +646,7 @@ router.post('/database/save-query', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Save query hatası:', error);
+    console.error('❌ Save query hatası:', error);
     res.status(500).json({
       success: false,
       message: 'Sorgu kaydedilirken hata oluştu',
@@ -632,7 +659,11 @@ router.post('/database/save-query', async (req, res) => {
 router.put('/database/save-query/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, category, is_public, query } = req.body;
+    const { name, description, category, is_public, sql_query } = req.body;
+    
+    // Debug: gelen veriyi logla
+    console.log('🔍 Update Query Request Body:', req.body);
+    console.log('🔍 SQL Query Field:', sql_query);
     
     // Önce mevcut sorguyu getir
     const existingQuery = await pool.query(
@@ -647,12 +678,19 @@ router.put('/database/save-query/:id', async (req, res) => {
       });
     }
     
-    // Eğer query null ise mevcut değeri kullan
-    const sqlQuery = query || existingQuery.rows[0].sql_query;
+    // Eğer sql_query null ise mevcut değeri kullan
+    const finalSqlQuery = sql_query || existingQuery.rows[0].sql_query;
+    
+    if (!finalSqlQuery || !finalSqlQuery.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'SQL sorgusu boş olamaz'
+      });
+    }
     
     const result = await pool.query(
       'UPDATE saved_queries SET name = $1, description = $2, category = $3, is_public = $4, sql_query = $5, updated_at = CURRENT_TIMESTAMP WHERE id = $6 RETURNING *',
-      [name, description, category, is_public, sqlQuery, id]
+      [name, description, category, is_public, finalSqlQuery, id]
     );
     
     res.json({

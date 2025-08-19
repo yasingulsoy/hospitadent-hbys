@@ -57,6 +57,12 @@ export default function LoginPage() {
         
         // Sadece kullanıcı bilgilerini localStorage'a kaydet (token yok)
         localStorage.setItem('user', JSON.stringify(data.user));
+        // Rol bilgisini cookie'ye yaz (admin/süperadmin butonlarının görünmesi için)
+        try {
+          const roleValue = typeof data.user.role === 'number' ? String(data.user.role) : String(data.user.role || '');
+          // 1 gün geçerli, samesite=lax
+          document.cookie = `role=${encodeURIComponent(roleValue)}; path=/; max-age=86400; samesite=lax`;
+        } catch {}
         
         // Token zaten HttpOnly cookie olarak backend tarafından set ediliyor
 

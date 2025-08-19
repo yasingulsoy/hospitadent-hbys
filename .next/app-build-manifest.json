@@ -21,15 +21,20 @@
       "static/chunks/main-app.js",
       "static/chunks/app/admin/page.js"
     ],
-    "/admin/activity-logs/page": [
+    "/admin/database/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/admin/activity-logs/page.js"
+      "static/chunks/app/admin/database/page.js"
     ],
-    "/admin/users/page": [
+    "/admin/queries/new/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/admin/users/page.js"
+      "static/chunks/app/admin/queries/new/page.js"
+    ],
+    "/admin/queries/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/admin/queries/page.js"
     ],
     "/reports/[id]/page": [
       "static/chunks/webpack.js",

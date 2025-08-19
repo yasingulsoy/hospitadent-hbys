@@ -1,6 +1,7 @@
 const express = require('express');
 const { authenticateToken, authorizeRoles } = require('../middleware/auth');
 const pool = require('../config/database');
+const mysql = require('mysql2/promise');
 
 const router = express.Router();
 
@@ -939,6 +940,149 @@ async function getDateBasedData(xAxis, yAxis, filters, includeDate) {
   }
 }
 
+// Herkese açık (auth gerekli) kayıtlı sorguları getir
+router.get('/public-queries', authenticateToken, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, description, sql_query, category, is_public, created_by, created_at, last_run, usage_count
+       FROM saved_queries
+       WHERE is_public = true
+       ORDER BY created_at DESC`
+    );
+    return res.json({ success: true, queries: rows });
+  } catch (error) {
+    console.error('public-queries error:', error);
+    return res.status(500).json({ success: false, message: 'Kamuya açık sorgular alınamadı', error: error.message });
+  }
+});
+
+// Herkese açık bağlantı durumu (sadece özet bilgisi)
+router.get('/connection-status', authenticateToken, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT name, is_active FROM data_connections ORDER BY updated_at DESC, id DESC`
+    );
+    const active = rows.find(r => r.is_active);
+    if (active) {
+      return res.json({ success: true, data: { isConnected: true, name: active.name } });
+    }
+    return res.json({ success: true, data: { isConnected: false } });
+  } catch (error) {
+    console.error('connection-status error:', error);
+    return res.json({ success: true, data: { isConnected: false } });
+  }
+});
+
+// Kayıtlı sorguyu normal kullanıcılar için çalıştır (aktif MariaDB bağlantısı ile)
+router.post('/run/:id', authenticateToken, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ success: false, message: 'Geçersiz id' });
+    }
+
+    const qRes = await pool.query('SELECT sql_query FROM saved_queries WHERE id = $1 AND (is_public = true)', [id]);
+    if (qRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Sorgu bulunamadı veya erişiminiz yok' });
+    }
+
+    const connRes = await pool.query('SELECT * FROM data_connections WHERE is_active = true ORDER BY updated_at DESC LIMIT 1');
+    if (connRes.rows.length === 0) {
+      // Bağlantı yoksa kullanıcıya admin mesajı gösterme
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Veritabanı bağlantısı kurulamadı. Lütfen daha sonra tekrar deneyin.',
+        technicalError: 'No active database connection'
+      });
+    }
+    const conn = connRes.rows[0];
+
+    try {
+      const mariadb = await mysql.createConnection({
+        host: conn.host,
+        port: parseInt(conn.port),
+        user: conn.username,
+        password: conn.password || '',
+        database: conn.database_name
+      });
+
+      const [rows] = await mariadb.execute(qRes.rows[0].sql_query);
+      await mariadb.end();
+
+      return res.json({ success: true, results: rows, rowCount: rows.length });
+    } catch (dbError) {
+      console.error('run query db error:', dbError);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Sorgu çalıştırılamadı. Lütfen daha sonra tekrar deneyin.',
+        technicalError: dbError.message 
+      });
+    }
+  } catch (error) {
+    console.error('run query error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Sorgu çalıştırılamadı. Lütfen daha sonra tekrar deneyin.',
+      technicalError: error.message 
+    });
+  }
+});
+
+// Tüm kullanıcılar için rapor çalıştırma (bağlantı kontrolü olmadan)
+router.post('/execute/:id', authenticateToken, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ success: false, message: 'Geçersiz id' });
+    }
+
+    const qRes = await pool.query('SELECT sql_query FROM saved_queries WHERE id = $1 AND (is_public = true)', [id]);
+    if (qRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Sorgu bulunamadı veya erişiminiz yok' });
+    }
+
+    const connRes = await pool.query('SELECT * FROM data_connections WHERE is_active = true ORDER BY updated_at DESC LIMIT 1');
+    if (connRes.rows.length === 0) {
+      // Bağlantı yoksa kullanıcıya admin mesajı gösterme
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Veritabanı bağlantısı kurulamadı. Lütfen daha sonra tekrar deneyin.',
+        technicalError: 'No active database connection'
+      });
+    }
+    const conn = connRes.rows[0];
+
+    try {
+      const mariadb = await mysql.createConnection({
+        host: conn.host,
+        port: parseInt(conn.port),
+        user: conn.username,
+        password: conn.password || '',
+        database: conn.database_name
+      });
+
+      const [rows] = await mariadb.execute(qRes.rows[0].sql_query);
+      await mariadb.end();
+
+      return res.json({ success: true, results: rows, rowCount: rows.length });
+    } catch (dbError) {
+      console.error('execute query db error:', dbError);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Sorgu çalıştırılamadı. Lütfen daha sonra tekrar deneyin.',
+        technicalError: dbError.message 
+      });
+    }
+  } catch (error) {
+    console.error('execute query error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Sorgu çalıştırılamadı. Lütfen daha sonra tekrar deneyin.',
+      technicalError: error.message 
+    });
+  }
+});
+
 async function getCategoryBasedData(xAxis, yAxis, filters, includeDate) {
   // Kategorik veri çekme
   console.log('🏷️ Kategorik veri çekiliyor:', xAxis.value, yAxis.value, 'Tarih dahil:', includeDate);
@@ -1164,13 +1308,9 @@ router.get('/:reportId/chart-config', authenticateToken, async (req, res) => {
   }
 });
 
-// Belirli rapor için tüm konfigleri listele (sadece admin/superadmin)
+// Belirli rapor için tüm konfigleri listele (okuma tüm kullanıcılar için serbest)
 router.get('/:reportId/chart-configs', authenticateToken, async (req, res) => {
   try {
-    if (!isAdminOrSuper(req.user)) {
-      return res.status(403).json({ success: false, message: 'Bu işlem için yetkiniz yok' });
-    }
-
     const reportId = parseInt(req.params.reportId);
     if (Number.isNaN(reportId)) {
       return res.status(400).json({ success: false, message: 'Geçersiz reportId' });
@@ -1186,6 +1326,126 @@ router.get('/:reportId/chart-configs', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('chart-configs list error:', error);
     return res.status(500).json({ success: false, message: 'Konfigürasyonlar listelenemedi', error: error.message });
+  }
+});
+
+// Belirli bir grafik konfigürasyonunu getir (düzenleme için)
+router.get('/:reportId/chart-config/:configId', authenticateToken, async (req, res) => {
+  try {
+    const reportId = parseInt(req.params.reportId);
+    const configId = parseInt(req.params.configId);
+    
+    if (Number.isNaN(reportId) || Number.isNaN(configId)) {
+      return res.status(400).json({ success: false, message: 'Geçersiz reportId veya configId' });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT * FROM report_chart_configs
+       WHERE id = $1 AND report_id = $2 AND is_active = TRUE`,
+      [configId, reportId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Grafik konfigürasyonu bulunamadı' });
+    }
+
+    return res.json({ success: true, config: rows[0] });
+  } catch (error) {
+    console.error('chart-config get error:', error);
+    return res.status(500).json({ success: false, message: 'Konfigürasyon getirilemedi', error: error.message });
+  }
+});
+
+// Belirli bir grafik konfigürasyonunu güncelle (düzenleme için)
+router.put('/:reportId/chart-config/:configId', authenticateToken, async (req, res) => {
+  try {
+    if (!isAdminOrSuper(req.user)) {
+      return res.status(403).json({ success: false, message: 'Bu işlem için yetkiniz yok' });
+    }
+
+    const reportId = parseInt(req.params.reportId);
+    const configId = parseInt(req.params.configId);
+    
+    if (Number.isNaN(reportId) || Number.isNaN(configId)) {
+      return res.status(400).json({ success: false, message: 'Geçersiz reportId veya configId' });
+    }
+
+    const {
+      name,
+      chart_type,
+      x_axis,
+      y_axis,
+      x_axis_type,
+      y_axis_type,
+      series,
+      aggregation,
+      sort_by,
+      group_by,
+      height,
+      chart_options,
+      filters,
+      is_default
+    } = req.body || {};
+
+    if (!chart_type || !x_axis || !y_axis) {
+      return res.status(400).json({ success: false, message: 'chart_type, x_axis ve y_axis zorunludur' });
+    }
+
+    // Eğer varsayılan işaretlenecekse, mevcut varsayılanları kaldır
+    if (is_default) {
+      await pool.query('UPDATE report_chart_configs SET is_default = FALSE WHERE report_id = $1 AND id != $2', [reportId, configId]);
+    }
+
+    const updateSql = `
+      UPDATE report_chart_configs SET
+        name = $3,
+        chart_type = $4,
+        x_axis = $5,
+        y_axis = $6,
+        x_axis_type = $7,
+        y_axis_type = $8,
+        series = $9,
+        aggregation = $10,
+        sort_by = $11,
+        group_by = $12,
+        height = $13,
+        chart_options = $14,
+        filters = $15,
+        is_default = $16,
+        updated_at = NOW()
+      WHERE id = $2 AND report_id = $1
+      RETURNING *;
+    `;
+
+    const params = [
+      reportId,
+      configId,
+      name,
+      chart_type,
+      x_axis,
+      y_axis,
+      x_axis_type || 'categorical',
+      y_axis_type || 'numeric',
+      Array.isArray(series) ? series : [],
+      aggregation,
+      sort_by,
+      group_by,
+      height,
+      chart_options || {},
+      filters || {},
+      !!is_default
+    ];
+
+    const { rows } = await pool.query(updateSql, params);
+    
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Grafik konfigürasyonu bulunamadı' });
+    }
+
+    return res.json({ success: true, config: rows[0] });
+  } catch (error) {
+    console.error('chart-config update error:', error);
+    return res.status(500).json({ success: false, message: 'Konfigürasyon güncellenemedi', error: error.message });
   }
 });
 
@@ -1227,6 +1487,19 @@ router.post('/:reportId/chart-config', authenticateToken, async (req, res) => {
       await pool.query('UPDATE report_chart_configs SET is_default = FALSE WHERE report_id = $1', [reportId]);
     }
 
+    // Aynı isim varsa benzersiz bir isim üret
+    const uniqueNameSql = `
+      WITH base AS (
+        SELECT $2::text AS base_name
+      ),
+      existing AS (
+        SELECT name FROM report_chart_configs WHERE report_id = $1 AND name ILIKE ($2 || '%')
+      )
+      SELECT CASE WHEN COUNT(*) = 0 THEN $2 ELSE $2 || ' ' || (COUNT(*)+1) END AS final_name FROM existing;
+    `;
+    const nameCheck = await pool.query(uniqueNameSql, [reportId, name]);
+    const finalName = nameCheck.rows?.[0]?.final_name || name;
+
     const upsertSql = `
       INSERT INTO report_chart_configs (
         report_id, name, chart_type, x_axis, y_axis, x_axis_type, y_axis_type, series,
@@ -1255,7 +1528,7 @@ router.post('/:reportId/chart-config', authenticateToken, async (req, res) => {
 
     const params = [
       reportId,
-      name,
+      finalName,
       chart_type,
       x_axis,
       y_axis,

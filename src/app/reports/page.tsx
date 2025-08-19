@@ -59,6 +59,7 @@ export default function ReportsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Tüm Kategoriler');
   const [sortBy, setSortBy] = useState<'date' | 'name' | 'category'>('date');
+  const [userRole, setUserRole] = useState<string>('user'); // Kullanıcı rolü
   
   // Dinamik grafik ayarları
   const [showAdvancedChart, setShowAdvancedChart] = useState(false);
@@ -74,11 +75,42 @@ export default function ReportsPage() {
   useEffect(() => {
     loadSavedQueries();
     loadAxisOptions();
+    loadUserRole();
   }, []);
+
+  // Kullanıcı rolünü yükle
+  const loadUserRole = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        // JWT token'dan rol bilgisini çıkar (basit decode)
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setUserRole(payload.role || 'user');
+      }
+    } catch (error) {
+      console.log('Kullanıcı rolü yüklenemedi, varsayılan: user');
+      setUserRole('user');
+    }
+  };
 
   const loadSavedQueries = async () => {
     try {
-      const response = await apiGet('http://localhost:5000/api/admin/database/save-query');
+      // Önce public endpoint'i dene, başarısız olursa admin endpoint'i dene
+      let response;
+      try {
+        response = await apiGet('http://localhost:5000/api/reports/public-queries');
+        const data = await response.json();
+        
+        if (data.success) {
+          setQueries(data.queries);
+          return;
+        }
+      } catch (error) {
+        console.log('Public endpoint başarısız, admin endpoint deneniyor...');
+      }
+
+      // Fallback: Admin endpoint'i dene
+      response = await apiGet('http://localhost:5000/api/admin/database/save-query');
       const data = await response.json();
       
       if (data.success) {
@@ -515,13 +547,19 @@ export default function ReportsPage() {
                 ? 'Arama kriterlerinize uygun rapor bulunamadı.' 
                 : 'Henüz hiç rapor oluşturulmamış.'}
             </p>
-            <Link
-              href="/admin/database"
-              className="bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              İlk Raporı Oluştur
-            </Link>
+            {userRole === 'admin' ? (
+              <Link
+                href="/admin/database"
+                className="bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                İlk Raporı Oluştur
+              </Link>
+            ) : (
+              <div className="text-gray-500 text-sm">
+                Yeni rapor oluşturmak için admin yetkisi gerekli
+              </div>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -581,25 +619,30 @@ export default function ReportsPage() {
                         Görüntüle
                       </Link>
                       
-                      <Link
-                        href={`/admin/database?edit=${query.id}`}
-                        className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200"
-                        title="Düzenle"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Link>
-                      
-                      <button
-                        className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
-                        title="Sil"
-                        onClick={() => {
-                          if (confirm('Bu raporu silmek istediğinizden emin misiniz?')) {
-                            // Silme işlemi
-                          }
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {/* Sadece admin kullanıcılar için düzenleme ve silme */}
+                      {userRole === 'admin' && (
+                        <>
+                          <Link
+                            href={`/admin/database?edit=${query.id}`}
+                            className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200"
+                            title="Düzenle"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Link>
+                          
+                          <button
+                            className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
+                            title="Sil"
+                            onClick={() => {
+                              if (confirm('Bu raporu silmek istediğinizden emin misiniz?')) {
+                                // Silme işlemi
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>

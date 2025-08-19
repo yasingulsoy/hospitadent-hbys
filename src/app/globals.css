@@ -16,6 +16,9 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  /* Zoom scroll sorununu önle */
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Input field stilleri - tüm projede geçerli */
@@ -47,6 +50,10 @@ input:disabled, textarea:disabled, select:disabled {
   border-radius: 12px;
   background: white;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  /* Zoom scroll sorununu önle */
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
 }
 
 .chart-container::-webkit-scrollbar {
@@ -335,6 +342,25 @@ table td {
 
 .transition-opacity {
   transition: opacity 0.2s ease-in-out;
+}
+
+/* Zoom scroll sorununu önleyen genel kurallar */
+* {
+  /* Hardware acceleration için */
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Ana container'lar için zoom scroll önleme */
+.min-h-screen {
+  overflow-x: hidden;
+  transform: translateZ(0);
+}
+
+/* Grid container'lar için zoom scroll önleme */
+.grid {
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 /* Custom scrollbar */

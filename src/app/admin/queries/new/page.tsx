@@ -99,15 +99,22 @@ export default function NewQueryPage() {
 
     setLoading(true);
     
+    // Debug: gönderilecek veriyi logla
+    const requestData = {
+      name: form.name,
+      description: form.description,
+      category: form.category,
+      sql_query: form.sql_query,
+      is_public: form.is_public,
+      tags: form.tags
+    };
+    
+    console.log('🔍 Frontend - Gönderilecek Veri:', requestData);
+    console.log('🔍 SQL Query Field Değeri:', form.sql_query);
+    console.log('🔍 SQL Query Field Tipi:', typeof form.sql_query);
+    
     try {
-      const response = await apiPost('http://localhost:5000/api/admin/database/save-query', {
-        name: form.name,
-        description: form.description,
-        category: form.category,
-        sql_query: form.sql_query,
-        is_public: form.is_public,
-        tags: form.tags
-      });
+      const response = await apiPost('http://localhost:5000/api/admin/database/save-query', requestData);
 
       if (response.ok) {
         const data = await response.json();

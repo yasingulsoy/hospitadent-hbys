@@ -26,7 +26,7 @@ import {
   XCircle
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { apiGet } from '../lib/api';
+import { apiGet, apiPost } from '../lib/api';
 
 // Tip tanımlamaları
 interface BranchCard {
@@ -75,6 +75,7 @@ export default function Home() {
   const [role, setRole] = useState<number | null>(null);
   const [branchCards, setBranchCards] = useState<BranchCard[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedBranchId, setSelectedBranchId] = useState<number | null>(null);
   const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
   const [queriesLoading, setQueriesLoading] = useState(true);
   const [dbConnectionStatus, setDbConnectionStatus] = useState<{
@@ -154,32 +155,14 @@ export default function Home() {
   const checkDatabaseConnection = async () => {
     setCheckingDbStatus(true);
     try {
-      const response = await apiGet('http://localhost:5000/api/admin/database-connections');
+      const response = await apiGet('http://localhost:5000/api/reports/connection-status');
       const data = await response.json();
-      
-      if (data.success && data.connections && data.connections.length > 0) {
-        const activeConnection = data.connections.find((conn: any) => conn.is_active);
-        
-        if (activeConnection) {
-          setDbConnectionStatus({
-            isConnected: true,
-            lastCheck: new Date().toLocaleString('tr-TR'),
-            message: `${activeConnection.name} bağlantısı aktif`
-          });
-        } else {
-          setDbConnectionStatus({
-            isConnected: false,
-            lastCheck: new Date().toLocaleString('tr-TR'),
-            message: 'Aktif bağlantı bulunamadı'
-          });
-        }
-      } else {
-        setDbConnectionStatus({
-          isConnected: false,
-          lastCheck: new Date().toLocaleString('tr-TR'),
-          message: 'Veritabanı bağlantısı bulunamadı'
-        });
-      }
+      const ok = data?.success && data?.data;
+      setDbConnectionStatus({
+        isConnected: ok ? !!data.data.isConnected : false,
+        lastCheck: new Date().toLocaleString('tr-TR'),
+        message: ok && data.data.isConnected ? `${data.data.name || 'MariaDB'} bağlantısı aktif` : 'Bağlantı yok'
+      });
     } catch (error) {
       setDbConnectionStatus({
         isConnected: false,
@@ -195,7 +178,8 @@ export default function Home() {
   const loadSavedQueries = async () => {
     try {
       setQueriesLoading(true);
-      const response = await apiGet('http://localhost:5000/api/admin/database/save-query');
+      // Normal kullanıcılar için herkese açık raporlar
+      const response = await apiGet('http://localhost:5000/api/reports/public-queries');
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
@@ -209,88 +193,45 @@ export default function Home() {
     }
   };
 
-  // Şube kartlarını yükle
-  const loadBranchCards = async () => {
+  // Seçili şube için şube kartlarını yükle
+  const loadBranchCards = async (branchId?: number) => {
     try {
       setLoading(true);
-      
-      // Basit mock data kullan, eski MySQL API'sini çağırma
-      const mockBranchCards = [
+      const effectiveBranchId = typeof branchId === 'number' ? branchId : selectedBranchId;
+      if (!effectiveBranchId) {
+        setBranchCards([]);
+        return;
+      }
+
+      const branch = realBranches.find((b) => b.id === effectiveBranchId);
+      const execRes = await apiPost('http://localhost:5000/api/branch-cards/execute-cards', { branch_id: effectiveBranchId });
+      if (!execRes.ok) {
+        setBranchCards([]);
+        return;
+      }
+
+      const execJson = await execRes.json();
+      const cards = (execJson?.data || []).map((card: any) => ({
+        card_title: card.card_title,
+        formatted_value: card.formatted_value,
+        data_type: card.data_type,
+        card_icon: card.card_icon
+      })) as CardData[];
+
+      setBranchCards([
         {
-          id: 1,
-          branch_name: 'Merkez Şube',
-          location: 'Ana şube',
-          branch_count: 5,
-          cards: [
-            { card_title: 'Hasta Sayısı', formatted_value: '1,234', data_type: 'number' },
-            { card_title: 'Günlük Tahakkuk', formatted_value: '₺45,678', data_type: 'currency' },
-            { card_title: 'Günlük Tahsilat', formatted_value: '₺38,901', data_type: 'currency' }
-          ]
-        },
-        {
-          id: 2,
-          branch_name: 'Kadıköy Şube',
-          location: 'Kadıköy',
-          branch_count: 3,
-          cards: [
-            { card_title: 'Hasta Sayısı', formatted_value: '856', data_type: 'number' },
-            { card_title: 'Günlük Tahakkuk', formatted_value: '₺32,456', data_type: 'currency' },
-            { card_title: 'Günlük Tahsilat', formatted_value: '₺28,123', data_type: 'currency' }
-          ]
-        },
-        {
-          id: 3,
-          branch_name: 'Beşiktaş Şube',
-          location: 'Beşiktaş',
-          branch_count: 4,
-          cards: [
-            { card_title: 'Hasta Sayısı', formatted_value: '1,089', data_type: 'number' },
-            { card_title: 'Günlük Tahakkuk', formatted_value: '₺41,234', data_type: 'currency' },
-            { card_title: 'Günlük Tahsilat', formatted_value: '₺35,678', data_type: 'currency' }
-          ]
+          id: effectiveBranchId,
+          branch_name: branch?.name || 'Şube',
+          location: (branch as any)?.location || branch?.code || '',
+          branch_count: 0,
+          cards
         }
-      ];
-      
-      setBranchCards(mockBranchCards);
+      ]);
       
     } catch (error: any) {
       console.error('Şube kartları yüklenirken hata:', error);
-      // Hata durumunda örnek veriler göster
-      setBranchCards([
-        {
-          id: 1,
-          branch_name: 'Merkez Şube',
-          location: 'Ana şube',
-          branch_count: 5,
-          cards: [
-            { card_title: 'Hasta Sayısı', formatted_value: '1,234', data_type: 'number' },
-            { card_title: 'Günlük Tahakkuk', formatted_value: '₺45,678', data_type: 'currency' },
-            { card_title: 'Günlük Tahsilat', formatted_value: '₺38,901', data_type: 'currency' }
-          ]
-        },
-        {
-          id: 2,
-          branch_name: 'Kadıköy Şube',
-          location: 'Kadıköy',
-          branch_count: 3,
-          cards: [
-            { card_title: 'Hasta Sayısı', formatted_value: '856', data_type: 'number' },
-            { card_title: 'Günlük Tahakkuk', formatted_value: '₺32,456', data_type: 'currency' },
-            { card_title: 'Günlük Tahsilat', formatted_value: '₺28,123', data_type: 'currency' }
-          ]
-        },
-        {
-          id: 3,
-          branch_name: 'Beşiktaş Şube',
-          location: 'Beşiktaş',
-          branch_count: 4,
-          cards: [
-            { card_title: 'Hasta Sayısı', formatted_value: '1,089', data_type: 'number' },
-            { card_title: 'Günlük Tahakkuk', formatted_value: '₺41,234', data_type: 'currency' },
-            { card_title: 'Günlük Tahsilat', formatted_value: '₺35,678', data_type: 'currency' }
-          ]
-        }
-      ]);
+      // Hata durumunda boş liste göster
+      setBranchCards([]);
     } finally {
       setLoading(false);
     }
@@ -303,6 +244,16 @@ export default function Home() {
   useEffect(() => {
     loadRealBranches();
   }, []);
+
+  // Şubeler yüklendiğinde varsayılan şubeyi seç ve kartları getir
+  useEffect(() => {
+    if (!selectedBranchId && realBranches.length > 0) {
+      const firstId = realBranches[0].id;
+      setSelectedBranchId(firstId);
+      loadBranchCards(firstId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [realBranches]);
 
   const loadRealBranches = async () => {
     try {
@@ -670,9 +621,22 @@ export default function Home() {
                   Kartları Yönet →
                 </Link>
               )}
-              <Link href="/all-branches" className="bg-green-600 text-white px-6 py-3 rounded-xl hover:bg-green-700 transition-all duration-300 font-semibold">
-                Tüm Şubeler →
-              </Link>
+              <div className="flex items-center gap-3">
+                <label className="text-sm text-gray-600">Şube:</label>
+                <select
+                  value={selectedBranchId ?? ''}
+                  onChange={(e) => {
+                    const id = Number(e.target.value);
+                    setSelectedBranchId(id);
+                    loadBranchCards(id);
+                  }}
+                  className="px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {realBranches.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
           

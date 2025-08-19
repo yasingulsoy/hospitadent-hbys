@@ -111,10 +111,11 @@ router.post('/login', async (req, res) => {
     // HttpOnly cookie olarak token ayarla
     res.cookie('token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      secure: false,
+      sameSite: 'lax',
       maxAge: 24 * 60 * 60 * 1000, // 24 saat
-      path: '/'
+      path: '/',
+      domain: 'localhost'
     });
 
     // Şifreyi response'dan çıkar
