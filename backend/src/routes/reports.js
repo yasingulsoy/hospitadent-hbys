@@ -5,20 +5,6 @@ const mysql = require('mysql2/promise');
 
 const router = express.Router();
 
-// Mock reports data
-const mockReports = {
-  dashboard: {
-    totalPatients: 250,
-    totalAppointments: 45,
-    totalTreatments: 120,
-    totalRevenue: 15000.00,
-    monthlyStats: [
-      { month: 'Ocak', patients: 25, appointments: 45, revenue: 1500 },
-      { month: 'Şubat', patients: 30, appointments: 52, revenue: 1800 }
-    ]
-  }
-};
-
 // Genel istatistikler
 router.get('/stats', authenticateToken, async (req, res) => {
   try {
@@ -897,6 +883,306 @@ router.post('/dynamic-chart', authenticateToken, async (req, res) => {
       error: error.message
     });
   }
+});
+
+// ==========================
+// Filtre Yönetimi ve Çalıştırma
+// ==========================
+
+// Tüm filtreleri getir (login gerekli)
+router.get('/filters', authenticateToken, async (req, res) => {
+	try {
+		const { rows } = await pool.query(
+			`SELECT id, filter_name, content FROM filters ORDER BY id`
+		);
+		return res.json({ success: true, filters: rows });
+	} catch (error) {
+		console.error('filters list error:', error);
+		return res.status(500).json({ success: false, message: 'Filtreler alınamadı', error: error.message });
+	}
+});
+
+// Belirli rapora bağlı filtreleri getir (report_key = route id veya tanımlı anahtar)
+router.get('/report/:reportKey/filters', authenticateToken, async (req, res) => {
+	try {
+		const { reportKey } = req.params;
+		const { rows } = await pool.query(
+			`SELECT rf.filter_id, rf.is_required, rf.display_order, f.filter_name, f.content
+			 FROM report_filters rf
+			 JOIN filters f ON f.id = rf.filter_id
+			 WHERE rf.report_key = $1
+			 ORDER BY rf.display_order, f.filter_name`,
+			[reportKey]
+		);
+		return res.json({ success: true, filters: rows });
+	} catch (error) {
+		console.error('report filters get error:', error);
+		return res.status(500).json({ success: false, message: 'Rapor filtreleri alınamadı', error: error.message });
+	}
+});
+
+// Rapore filtre ekle/güncelle (UI tarafında admin/superadmin gösterilecek; backend kısıtlaması istemediniz)
+router.post('/report/:reportKey/filters', authenticateToken, async (req, res) => {
+	try {
+		const { reportKey } = req.params;
+		const { filter_id, is_required = false, display_order = 0 } = req.body || {};
+		if (!filter_id) {
+			return res.status(400).json({ success: false, message: 'filter_id zorunludur' });
+		}
+
+		const upsertSql = `
+			INSERT INTO report_filters (report_key, filter_id, is_required, display_order)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (report_key, filter_id) DO UPDATE SET
+				is_required = EXCLUDED.is_required,
+				display_order = EXCLUDED.display_order
+			RETURNING report_key, filter_id, is_required, display_order;
+		`;
+		const { rows } = await pool.query(upsertSql, [reportKey, filter_id, !!is_required, parseInt(display_order) || 0]);
+		return res.json({ success: true, mapping: rows[0] });
+	} catch (error) {
+		console.error('report filter upsert error:', error);
+		return res.status(500).json({ success: false, message: 'Rapor filtresi eklenemedi', error: error.message });
+	}
+});
+
+// Rapor filtresi kaldır
+router.delete('/report/:reportKey/filters/:filterId', authenticateToken, async (req, res) => {
+	try {
+		const { reportKey, filterId } = req.params;
+		await pool.query(`DELETE FROM report_filters WHERE report_key = $1 AND filter_id = $2`, [reportKey, parseInt(filterId)]);
+		return res.json({ success: true });
+	} catch (error) {
+		console.error('report filter delete error:', error);
+		return res.status(500).json({ success: false, message: 'Rapor filtresi silinemedi', error: error.message });
+	}
+});
+
+// Yardımcı: Atanmış filtre tanımlarına ve kullanıcı parametrelerine göre WHERE oluştur
+function buildWhereClauseFromParams(assignedFilters, userParams) {
+	const whereClauses = [];
+	const values = [];
+
+	// Kolon adını al: content.column varsa onu kullan; yoksa content.param veya params.start/params.end'den türemezse atla
+	const getColumnName = (content) => {
+		if (!content) return null;
+		if (content.column) return content.column;
+		if (content.param) return content.param;
+		return null;
+	};
+
+	for (const af of assignedFilters) {
+		let content;
+		try {
+			content = typeof af.content === 'object' ? af.content : JSON.parse(af.content);
+		} catch (_) {
+			continue;
+		}
+
+		if (content?.type === 'select') {
+			const columnName = getColumnName(content);
+			const paramKey = content.param; // UI tarafı bu anahtarla göndersin
+			if (!columnName || !paramKey) continue;
+			const val = userParams?.[paramKey];
+			if (val === undefined || val === null || (Array.isArray(val) && val.length === 0)) continue;
+			if (Array.isArray(val)) {
+				// IN listesi için placeholder'ları genişlet
+				const flatVals = val.map(v => (typeof v === 'string' && !Number.isNaN(Number(v)) ? Number(v) : v));
+				const placeholders = flatVals.map(() => '?').join(', ');
+				whereClauses.push(`${columnName} IN (${placeholders})`);
+				values.push(...flatVals);
+			} else {
+				if (content.operator === 'like') {
+					whereClauses.push(`${columnName} LIKE ?`);
+					values.push(`%${val}%`);
+				} else {
+					whereClauses.push(`${columnName} = ?`);
+					values.push(val);
+				}
+			}
+		} else if (content?.type === 'date_range') {
+			const columnName = getColumnName(content);
+			const startKey = content.params?.start;
+			const endKey = content.params?.end;
+			if (!columnName || (!startKey && !endKey)) continue;
+			const startVal = startKey ? userParams?.[startKey] : undefined;
+			const endVal = endKey ? userParams?.[endKey] : undefined;
+			if (startVal && endVal) {
+				// BETWEEN yerine >= ve <= kullanmak bazı sürümlerde daha stabil
+				whereClauses.push(`${columnName} >= ?`);
+				values.push(startVal);
+				whereClauses.push(`${columnName} <= ?`);
+				values.push(endVal);
+			} else if (startVal) {
+				whereClauses.push(`${columnName} >= ?`);
+				values.push(startVal);
+			} else if (endVal) {
+				whereClauses.push(`${columnName} <= ?`);
+				values.push(endVal);
+			}
+		}
+	}
+
+	const sql = whereClauses.length > 0 ? whereClauses.join(' AND ') : '';
+	return { sql, values };
+}
+
+// Kayıtlı sorguyu filtrelerle çalıştır (login gerekli)
+// Body: { params: { branch_id: [1,2], start_date: 'YYYY-MM-DD', end_date: 'YYYY-MM-DD', ... } }
+router.post('/execute/:id/with-filters', authenticateToken, async (req, res) => {
+	try {
+		const id = parseInt(req.params.id);
+		if (Number.isNaN(id)) {
+			return res.status(400).json({ success: false, message: 'Geçersiz id' });
+		}
+
+		// Sorguyu getir
+		const qRes = await pool.query('SELECT sql_query FROM saved_queries WHERE id = $1 AND (is_public = true)', [id]);
+		if (qRes.rows.length === 0) {
+			return res.status(404).json({ success: false, message: 'Sorgu bulunamadı veya erişiminiz yok' });
+		}
+
+		// Aktif MariaDB bağlantısı
+		const connRes = await pool.query('SELECT * FROM data_connections WHERE is_active = true ORDER BY updated_at DESC LIMIT 1');
+		if (connRes.rows.length === 0) {
+			return res.status(400).json({ 
+				success: false, 
+				message: 'Veritabanı bağlantısı kurulamadı. Lütfen daha sonra tekrar deneyin.',
+				technicalError: 'No active database connection'
+			});
+		}
+		const conn = connRes.rows[0];
+
+		// Raporun anahtarını belirle: frontend /reports/[id] için id'yi report_key olarak kullanıyoruz
+		const reportKey = String(id);
+
+		// Bu rapora bağlı filtreleri çek
+		const rfRes = await pool.query(
+			`SELECT rf.filter_id, f.filter_name, f.content
+			 FROM report_filters rf JOIN filters f ON f.id = rf.filter_id
+			 WHERE rf.report_key = $1`,
+			[reportKey]
+		);
+		const assignedFilters = rfRes.rows || [];
+
+		// Kullanıcı parametreleri
+		const { params = {} } = req.body || {};
+
+		let finalSql = qRes.rows[0].sql_query || '';
+		if (!finalSql || typeof finalSql !== 'string') {
+			return res.status(400).json({ success: false, message: 'Geçersiz sql_query' });
+		}
+
+		// Adlandırılmış placeholder desteği: :start_date, :end_date, :clinic_id
+		const foundNamed = finalSql.match(/:[a-zA-Z_][a-zA-Z0-9_]*/g) || [];
+		const namedKeys = [...new Set(foundNamed.map(s => s.slice(1)))];
+		let useNamed = false;
+		let executeParams;
+		let appliedWhere; // whereSQL bilgisini sadece eski mantıkta dolduracağız
+		if (namedKeys.length > 0) {
+			useNamed = true;
+			// Eksik parametre kontrolü
+			const missing = namedKeys.filter(k => !(k in params));
+			if (missing.length > 0) {
+				return res.status(400).json({ success: false, message: `Eksik parametre(ler): ${missing.join(', ')}` });
+			}
+			// Sadece kullanılanları al
+			executeParams = namedKeys.reduce((acc, k) => { acc[k] = params[k]; return acc; }, {});
+		} else {
+			// Eski mantık: atanmış filtrelerden WHERE üret ve ekle
+			const { sql: whereSQL, values: whereValues } = buildWhereClauseFromParams(assignedFilters, params);
+			appliedWhere = whereSQL;
+			if (/\/\*\s*filters\s*\*\//i.test(finalSql)) {
+				finalSql = finalSql.replace(/\/\*\s*filters\s*\*\//i, whereSQL ? ` WHERE ${whereSQL} ` : ' ');
+			} else if (whereSQL) {
+				const hasWhere = /\bwhere\b/i.test(finalSql);
+				finalSql = hasWhere ? `${finalSql} AND ${whereSQL}` : `${finalSql} WHERE ${whereSQL}`;
+			}
+			executeParams = whereValues;
+		}
+
+		// Debug: Çalıştırılacak SQL ve parametreler
+		try {
+			console.log('🧪 Executing saved_query with filters', {
+				reportId: id,
+				useNamed,
+				namedKeys,
+				finalSql,
+				executeParams
+			});
+		} catch (_) {}
+
+		// Adlandırılmış placeholder'larda (":param") dizi değerlerini genişlet (IN (:ids) -> IN (:ids_0,:ids_1,...))
+		function expandArrayParamsInNamedSql(sql, params) {
+			let transformedSql = sql;
+			const transformedParams = { ...params };
+			for (const [key, value] of Object.entries(params || {})) {
+				if (Array.isArray(value)) {
+					// Boş dizi durumunda IN (NULL) ile sonuçsuz hale getir
+					if (value.length === 0) {
+						const reEmpty = new RegExp(`:${key}\\b`, 'g');
+						transformedSql = transformedSql.replace(reEmpty, 'NULL');
+						delete transformedParams[key];
+						continue;
+					}
+					const phList = value.map((_, idx) => `:${key}_${idx}`).join(', ');
+					// Sadece ":key" eşleşmelerini değiştir
+					const re = new RegExp(`:${key}\\b`, 'g');
+					transformedSql = transformedSql.replace(re, phList);
+					value.forEach((v, idx) => { transformedParams[`${key}_${idx}`] = v; });
+					delete transformedParams[key];
+				}
+			}
+			return { sql: transformedSql, params: transformedParams };
+		}
+
+		try {
+			// Eğer adlandırılmış parametreler kullanılıyorsa, dizi parametrelerini genişlet
+			if (useNamed && executeParams && typeof executeParams === 'object') {
+				const expanded = expandArrayParamsInNamedSql(finalSql, executeParams);
+				finalSql = expanded.sql;
+				executeParams = expanded.params;
+			}
+			// Genişletme sonrası son SQL ve parametreleri gözlemlemek için ek log
+			try {
+				console.log('🔎 Expanded SQL (after array expansion)', { finalSql, executeParams });
+			} catch (_) {}
+			const mariadb = await mysql.createConnection({
+				host: conn.host,
+				port: parseInt(conn.port),
+				user: conn.username,
+				password: conn.password || '',
+				database: conn.database_name,
+				namedPlaceholders: true
+			});
+
+			const [rows] = Array.isArray(executeParams)
+				? await mariadb.execute(finalSql, executeParams)
+				: await mariadb.execute(finalSql, executeParams || {});
+			await mariadb.end();
+
+			return res.json({ 
+				success: true, 
+				results: rows, 
+				rowCount: rows.length, 
+				applied: appliedWhere !== undefined ? { where: appliedWhere } : undefined 
+			});
+		} catch (dbError) {
+			console.error('execute with filters db error:', dbError);
+			return res.status(500).json({ 
+				success: false, 
+				message: 'Sorgu çalıştırılamadı. Lütfen daha sonra tekrar deneyin.',
+				technicalError: dbError.message 
+			});
+		}
+	} catch (error) {
+		console.error('execute with filters error:', error);
+		return res.status(500).json({ 
+			success: false, 
+			message: 'Sorgu çalıştırılamadı. Lütfen daha sonra tekrar deneyin.',
+			technicalError: error.message 
+		});
+	}
 });
 
 // Yardımcı fonksiyonlar

@@ -111,6 +111,11 @@ export default function ReportDetailPage() {
   const [showAdvancedChartConfig, setShowAdvancedChartConfig] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [initialChartConfig, setInitialChartConfig] = useState<any | null>(null);
+  // Sunucu taraflı filtreler (DB tabanlı)
+  const [dbFilters, setDbFilters] = useState<any[]>([]);
+  const [assignedFilters, setAssignedFilters] = useState<any[]>([]);
+  const [serverFilterParams, setServerFilterParams] = useState<Record<string, any>>({});
+  const [showAddFilterModal, setShowAddFilterModal] = useState(false);
   const [role, setRole] = useState<string | null>(null);
   // Daha kapsamlı admin kontrolü
   const isAdminOrSuper = (
@@ -906,7 +911,11 @@ export default function ReportDetailPage() {
         const query = data.queries.find((q: SavedQuery) => q.id === parseInt(id));
         if (query) {
           setSavedQuery(query);
-          executeQuery(query);
+          // Otomatik çalıştırmayı kaldırdık; filtrelerle çalıştırılacak
+          // Rapor filtrelerini getir
+          try {
+            await fetchAssignedReportFilters(String(query.id));
+          } catch (e) {}
         } else {
           setError('Rapor bulunamadı');
         }
@@ -915,6 +924,71 @@ export default function ReportDetailPage() {
       setError('Rapor yüklenirken hata oluştu');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Raporun atanmış filtrelerini getir
+  const fetchAssignedReportFilters = async (reportKey: string) => {
+    const res = await apiGet(`http://localhost:5000/api/reports/report/${reportKey}/filters`);
+    const data = await res.json();
+    if (data?.success) {
+      setAssignedFilters((data.filters || []).map((f: any) => ({
+        ...f,
+        // content string gelebilir; objeye çevir
+        content: typeof f.content === 'string' ? (() => { try { return JSON.parse(f.content); } catch { return f.content; } })() : f.content
+      })));
+    }
+  };
+
+  // Tüm filtreleri getir (Admin/SuperAdmin için Filtre Ekle modalında listelemek amacıyla)
+  const fetchAllDbFilters = async () => {
+    const res = await apiGet('http://localhost:5000/api/reports/filters');
+    const data = await res.json();
+    if (data?.success) {
+      setDbFilters((data.filters || []).map((f: any) => ({
+        ...f,
+        content: typeof f.content === 'string' ? (() => { try { return JSON.parse(f.content); } catch { return f.content; } })() : f.content
+      })));
+    }
+  };
+
+  // Rapora filtre ekle
+  const addFilterToReport = async (filterId: number) => {
+    if (!savedQuery) return;
+    await apiPost(`http://localhost:5000/api/reports/report/${savedQuery.id}/filters`, {
+      filter_id: filterId,
+      is_required: false,
+      display_order: (assignedFilters?.length || 0) + 1
+    });
+    await fetchAssignedReportFilters(String(savedQuery.id));
+  };
+
+  // Filtre girişleri değiştiğinde paramları güncelle
+  const updateServerFilterParam = (key: string, value: any) => {
+    setServerFilterParams(prev => ({ ...prev, [key]: value }));
+  };
+
+  // Yeni: Filtrelerle çalıştır
+  const executeWithFilters = async () => {
+    if (!savedQuery) return;
+    setExecuting(true);
+    setError(null);
+    try {
+      const response = await apiPost(`http://localhost:5000/api/reports/execute/${savedQuery.id}/with-filters`, {
+        params: serverFilterParams
+      });
+      const data = await response.json();
+      if (data?.success) {
+        const rows = data.results || [];
+        setQueryResult({ success: true, results: rows, message: 'Rapor çalıştırıldı' });
+        setFilteredData(rows);
+      } else {
+        setError(data?.message || 'Sorgu çalıştırılamadı');
+      }
+    } catch (err) {
+      setError('Sorgu çalıştırılırken hata oluştu');
+    } finally {
+      setExecuting(false);
     }
   };
 
@@ -1633,12 +1707,12 @@ export default function ReportDetailPage() {
             
             <div className="flex items-center space-x-3">
               <button
-                onClick={() => executeQuery(savedQuery!)}
+                onClick={executeWithFilters}
                 disabled={executing}
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50"
               >
                 <RefreshCw className={`h-4 w-4 ${executing ? 'animate-spin' : ''}`} />
-                {executing ? 'Çalıştırılıyor...' : 'Yeniden Çalıştır'}
+                {executing ? 'Çalıştırılıyor...' : 'Uygula'}
               </button>
               
               {/* CSV İndirme Butonu */}
@@ -1663,17 +1737,7 @@ export default function ReportDetailPage() {
                 PDF İndir
               </button>
               
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
-                  showFilters 
-                    ? 'bg-green-600 text-white hover:bg-green-700' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                <Filter className="h-4 w-4" />
-                {showFilters ? '✔ Filtreler' : 'Filtreler'}
-              </button>
+              {/* Eski client-side filtre butonu kaldırıldı */}
 
               {/* Kaydet */}
               {isAdminOrSuper && (
@@ -1835,195 +1899,109 @@ export default function ReportDetailPage() {
         )}
 
         {/* Filtreler */}
-        {showFilters && analyzeData && (
+        {/* Yeni: Sunucu Taraflı Filtreler (DB tabanlı) */}
+        {savedQuery && (
           <div className="bg-white rounded-xl shadow-sm p-5 mb-6 border border-gray-100">
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-800">
-              <Filter className="h-5 w-5" />
-              Filtreler
-            </h3>
-            
-            {/* Yatay Kaydırılabilir Filtreler */}
-            <div className="overflow-x-auto pb-4">
-              <div className="flex gap-4 min-w-max">
-                {/* Tüm Kolonlar için Filtreler */}
-                {analyzeData.columns.map(column => {
-                  const isNumeric = analyzeData.numericColumns.includes(column);
-                  const isDate = analyzeData.dateColumns.includes(column);
-                  const isCategorical = analyzeData.categoricalColumns.includes(column);
-                  
-                  // Değer sayısını hesapla
-                  const uniqueValues = getFilterOptions(column);
-                  const valueCount = uniqueValues.length;
-                  
-                  // Filtre türünü belirle
-                  let filterType = 'search'; // varsayılan
-                  if (valueCount <= 10) {
-                    filterType = 'checkbox'; // Sadece checkbox
-                  } else if (valueCount <= 50) {
-                    filterType = 'mixed'; // Checkbox + arama
-                  } else {
-                    filterType = 'search'; // Sadece arama
-                  }
-                  
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-800">
+                <Filter className="h-5 w-5" /> Sunucu Filtreleri
+              </h3>
+              {isAdminOrSuper && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={async () => { await fetchAllDbFilters(); setShowAddFilterModal(true); }}
+                    className="px-3 py-2 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+                  >
+                    Filtre Ekle
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Atanmış filtrelerin giriş alanları */}
+            {assignedFilters.length === 0 ? (
+              <div className="text-sm text-gray-500">Bu rapora henüz filtre atanmadı.</div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {assignedFilters.map((af: any) => {
+                  const key = af.content?.param || af.content?.params?.start || af.filter_name;
+                  const type = af.content?.type;
                   return (
-                    <div key={column} className="min-w-[300px] bg-white p-4 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-                      <label className="block text-sm font-medium text-gray-700 mb-3">
-                        {column}
-                        {isNumeric && <span className="text-blue-600 text-xs ml-2 font-medium">(Sayısal)</span>}
-                        {isDate && <span className="text-green-600 text-xs ml-2 font-medium">(Tarih)</span>}
-                        {isCategorical && <span className="text-purple-600 text-xs ml-2 font-medium">(Kategori - {valueCount} değer)</span>}
-                      </label>
-                      
-                      {/* Sayısal Kolonlar için Aralık Filtresi */}
-                      {isNumeric && (
-                        <div className="space-y-3">
-                          <div className="flex gap-2">
-                            <input
-                              type="number"
-                              placeholder="Min"
-                              value={filters[`${column}_min`] || ''}
-                              onChange={(e) => setFilters(prev => ({ 
-                                ...prev, 
-                                [`${column}_min`]: e.target.value 
-                              }))}
-                              className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:border-gray-400 transition-colors"
-                            />
-                            <input
-                              type="number"
-                              placeholder="Max"
-                              value={filters[`${column}_max`] || ''}
-                              onChange={(e) => setFilters(prev => ({ 
-                                ...prev, 
-                                [`${column}_max`]: e.target.value 
-                              }))}
-                              className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:border-gray-400 transition-colors"
-                            />
-                          </div>
+                    <div key={`${af.filter_id}-${key}`} className="p-4 border border-gray-200 rounded-lg">
+                      <div className="text-sm font-medium text-gray-700 mb-2">{af.filter_name}</div>
+                      {type === 'select' && (
+                        <select
+                          multiple={!!af.content?.multiple}
+                          value={serverFilterParams[af.content?.param] || (af.content?.multiple ? [] : '')}
+                          onChange={(e) => {
+                            if (af.content?.multiple) {
+                              const vals = Array.from(e.target.selectedOptions).map(o => (o as HTMLOptionElement).value);
+                              updateServerFilterParam(af.content.param, vals.map(v => isNaN(Number(v)) ? v : Number(v)));
+                            } else {
+                              const v = e.target.value;
+                              updateServerFilterParam(af.content.param, isNaN(Number(v)) ? v : Number(v));
+                            }
+                          }}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                        >
+                          {!af.content?.multiple && <option value="">Seçiniz</option>}
+                          {(af.content?.options || []).map((opt: any) => (
+                            <option key={opt.id} value={opt.id}>{opt.name}</option>
+                          ))}
+                        </select>
+                      )}
+                      {type === 'date_range' && (
+                        <div className="flex gap-2">
                           <input
-                            type="text"
-                            placeholder="Arama..."
-                            value={filters[column] || ''}
-                            onChange={(e) => setFilters(prev => ({ ...prev, [column]: e.target.value }))}
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:border-gray-400 transition-colors"
+                            type="date"
+                            value={serverFilterParams[af.content?.params?.start] || ''}
+                            onChange={(e) => updateServerFilterParam(af.content?.params?.start, e.target.value)}
+                            className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                          />
+                          <input
+                            type="date"
+                            value={serverFilterParams[af.content?.params?.end] || ''}
+                            onChange={(e) => updateServerFilterParam(af.content?.params?.end, e.target.value)}
+                            className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
                           />
                         </div>
-                      )}
-                      
-                      {/* Tarih Kolonlar için Aralık Filtresi */}
-                      {isDate && (
-                        <div className="space-y-3">
-                          <div className="flex gap-2">
-                            <input
-                              type="date"
-                              value={filters[`${column}_start`] || ''}
-                              onChange={(e) => setFilters(prev => ({ 
-                                ...prev, 
-                                [`${column}_start`]: e.target.value 
-                              }))}
-                              className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:border-gray-400 transition-colors"
-                            />
-                            <input
-                              type="date"
-                              value={filters[`${column}_end`] || ''}
-                              onChange={(e) => setFilters(prev => ({ 
-                                ...prev, 
-                                [`${column}_end`]: e.target.value 
-                              }))}
-                              className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:border-gray-400 transition-colors"
-                            />
-                          </div>
-                          <input
-                            type="text"
-                            placeholder="Arama..."
-                            value={filters[column] || ''}
-                            onChange={(e) => setFilters(prev => ({ ...prev, [column]: e.target.value }))}
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:border-gray-400 transition-colors"
-                          />
-                        </div>
-                      )}
-                      
-                      {/* Kategori Kolonlar için Akıllı Filtreleme */}
-                      {isCategorical && (
-                        <div className="space-y-3">
-                          {/* Akıllı çoklu seçim + arama (tüm değerler) */}
-                          <input
-                            type="text"
-                            placeholder="Ara..."
-                            value={filters[`${column}_search`] || ''}
-                            onChange={(e) => setFilters(prev => ({
-                              ...prev,
-                              [`${column}_search`]: e.target.value
-                            }))}
-                            className="w-full mb-2 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:border-gray-400 transition-colors"
-                          />
-                          <div className="max-h-40 overflow-y-auto space-y-2 p-2 bg-gray-50 rounded-lg border border-gray-200">
-                            {uniqueValues
-                              .filter(value =>
-                                !filters[`${column}_search`] ||
-                                String(value).toLowerCase().includes(String(filters[`${column}_search`]).toLowerCase())
-                              )
-                              .map((value, index) => {
-                                const isSelected = (multiSelectFilters[column] || []).includes(String(value));
-                                return (
-                                  <label key={index} className="flex items-center space-x-2 cursor-pointer text-xs hover:bg-white hover:shadow-sm p-1 rounded transition-all">
-                                    <input
-                                      type="checkbox"
-                                      checked={isSelected}
-                                      onChange={() => toggleMultiSelectFilter(column, String(value))}
-                                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                    />
-                                    <span className="truncate text-gray-700 font-medium" title={String(value)}>{String(value)}</span>
-                                  </label>
-                                );
-                              })}
-                          </div>
-                          
-                          {/* Eski modlar (checkbox/mixed/search) kaldırıldı; tekleşmiş UI kullanılıyor */}
-                        </div>
-                      )}
-                      
-                      {/* Genel Arama (Tüm kolonlar için) */}
-                      {!isNumeric && !isDate && !isCategorical && (
-                        <input
-                          type="text"
-                          placeholder="Arama..."
-                          value={filters[column] || ''}
-                          onChange={(e) => setFilters(prev => ({ ...prev, [column]: e.target.value }))}
-                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:border-gray-400 transition-colors"
-                        />
                       )}
                     </div>
                   );
                 })}
               </div>
-            </div>
-            
-            {/* Filtre Kontrolleri */}
-            <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-              <div className="text-sm text-gray-600">
-                {Object.keys(filters).filter(key => filters[key] && filters[key] !== '').length + 
-                 Object.keys(multiSelectFilters).filter(key => multiSelectFilters[key] && multiSelectFilters[key].length > 0).length} aktif filtre
+            )}
+
+            {/* Filtre Ekle Modalı */}
+            {showAddFilterModal && (
+              <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+                <div className="bg-white rounded-xl shadow-xl p-5 w-full max-w-lg">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="text-lg font-semibold">Filtre Ekle</div>
+                    <button onClick={() => setShowAddFilterModal(false)} className="text-gray-500 hover:text-gray-700">Kapat</button>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto divide-y">
+                    {dbFilters
+                      .filter(f => !assignedFilters.some((af: any) => af.filter_id === f.id))
+                      .map((f: any) => (
+                        <button
+                          key={f.id}
+                          onClick={async () => { await addFilterToReport(f.id); setShowAddFilterModal(false); }}
+                          className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                        >
+                          {f.filter_name}
+                        </button>
+                      ))}
+                    {dbFilters.filter(f => !assignedFilters.some((af: any) => af.filter_id === f.id)).length === 0 && (
+                      <div className="text-sm text-gray-500 p-3">Eklenecek filtre kalmadı.</div>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    setFilters({});
-                    setMultiSelectFilters({});
-                  }}
-                  className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Tüm Filtreleri Temizle
-                </button>
-                <button
-                  onClick={() => setShowFilters(false)}
-                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Filtreleri Uygula
-                </button>
-              </div>
-            </div>
+            )}
           </div>
         )}
+
 
         {/* Grafik Türü Seçimi (sadece edit modunda) */}
         {isEditMode && analyzeData && showChart && (
