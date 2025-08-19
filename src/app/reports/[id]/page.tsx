@@ -103,6 +103,8 @@ export default function ReportDetailPage() {
   const [multiSelectFilters, setMultiSelectFilters] = useState<Record<string, string[]>>({});
   const [filteredData, setFilteredData] = useState<any[]>([]);
   const [selectedChartType, setSelectedChartType] = useState<'bar' | 'line' | 'pie' | 'area' | 'scatter' | 'heatmap' | 'radar' | 'table'>('bar');
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [showFilters, setShowFilters] = useState(false);
   const [showChart, setShowChart] = useState(true);
   const [showChartSuggestions, setShowChartSuggestions] = useState(false);
@@ -394,8 +396,43 @@ export default function ReportDetailPage() {
       }
     });
 
+    // Sıralama uygula
+    if (sortColumn && filtered.length > 0) {
+      filtered.sort((a, b) => {
+        const aVal = a[sortColumn];
+        const bVal = b[sortColumn];
+        
+        // Null/undefined değerleri sona al
+        if (aVal === null || aVal === undefined) return 1;
+        if (bVal === null || bVal === undefined) return -1;
+        
+        // Sayısal değerler için
+        const aNum = Number(aVal);
+        const bNum = Number(bVal);
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+          return sortDirection === 'asc' ? aNum - bNum : bNum - aNum;
+        }
+        
+        // Tarih değerleri için
+        const aDate = new Date(aVal);
+        const bDate = new Date(bVal);
+        if (!isNaN(aDate.getTime()) && !isNaN(bDate.getTime())) {
+          return sortDirection === 'asc' ? aDate.getTime() - bDate.getTime() : bDate.getTime() - aDate.getTime();
+        }
+        
+        // String değerler için
+        const aStr = String(aVal).toLowerCase();
+        const bStr = String(bVal).toLowerCase();
+        if (sortDirection === 'asc') {
+          return aStr.localeCompare(bStr, 'tr');
+        } else {
+          return bStr.localeCompare(aStr, 'tr');
+        }
+      });
+    }
+
     return filtered;
-  }, [queryResult?.results, filters, multiSelectFilters, analyzeData]);
+  }, [queryResult?.results, filters, multiSelectFilters, analyzeData, sortColumn, sortDirection]);
 
   // Veri analizi hazır olduğunda başlangıç konfigini uygula
   useEffect(() => {
@@ -429,8 +466,22 @@ export default function ReportDetailPage() {
   const getFilterOptions = (column: string) => {
     if (!queryResult?.results) return [];
     
-    const uniqueValues = [...new Set(queryResult.results.map(item => item[column]))];
-    return uniqueValues.filter(v => v !== null && v !== undefined).slice(0, 50);
+    const uniqueValues = [...new Set(queryResult.results.map(item => item[column]))]
+      .filter(v => v !== null && v !== undefined)
+      .sort((a, b) => String(a).localeCompare(String(b), 'tr', { sensitivity: 'base' }));
+    return uniqueValues;
+  };
+
+  // Sıralama fonksiyonu
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      // Aynı kolonda tıklandı, yönü değiştir
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // Farklı kolonda tıklandı, yeni kolonu seç ve ASC ile başla
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
   };
 
   // Gelişmiş grafik konfigürasyonu oluştur
@@ -1577,7 +1628,6 @@ export default function ReportDetailPage() {
               </div>
               <div>
                 <h1 className="text-3xl font-bold text-gray-900">{savedQuery?.name}</h1>
-                <p className="text-gray-600 mt-1">{savedQuery?.description}</p>
               </div>
             </div>
             
@@ -1895,24 +1945,24 @@ export default function ReportDetailPage() {
                       {/* Kategori Kolonlar için Akıllı Filtreleme */}
                       {isCategorical && (
                         <div className="space-y-3">
-                          {/* Dropdown (her zaman) */}
-                          <select
-                            value={filters[column] || ''}
-                            onChange={(e) => setFilters(prev => ({ ...prev, [column]: e.target.value }))}
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:border-gray-400 transition-colors"
-                          >
-                            <option value="">Tümü</option>
-                            {uniqueValues.slice(0, 20).map((value, index) => (
-                              <option key={index} value={value}>
-                                {String(value).substring(0, 25)}
-                              </option>
-                            ))}
-                          </select>
-                          
-                          {/* Checkbox'lar - 10'dan az değer varsa */}
-                          {filterType === 'checkbox' && (
-                            <div className="max-h-32 overflow-y-auto space-y-2 p-2 bg-gray-50 rounded-lg border border-gray-200">
-                              {uniqueValues.map((value, index) => {
+                          {/* Akıllı çoklu seçim + arama (tüm değerler) */}
+                          <input
+                            type="text"
+                            placeholder="Ara..."
+                            value={filters[`${column}_search`] || ''}
+                            onChange={(e) => setFilters(prev => ({
+                              ...prev,
+                              [`${column}_search`]: e.target.value
+                            }))}
+                            className="w-full mb-2 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:border-gray-400 transition-colors"
+                          />
+                          <div className="max-h-40 overflow-y-auto space-y-2 p-2 bg-gray-50 rounded-lg border border-gray-200">
+                            {uniqueValues
+                              .filter(value =>
+                                !filters[`${column}_search`] ||
+                                String(value).toLowerCase().includes(String(filters[`${column}_search`]).toLowerCase())
+                              )
+                              .map((value, index) => {
                                 const isSelected = (multiSelectFilters[column] || []).includes(String(value));
                                 return (
                                   <label key={index} className="flex items-center space-x-2 cursor-pointer text-xs hover:bg-white hover:shadow-sm p-1 rounded transition-all">
@@ -1922,61 +1972,13 @@ export default function ReportDetailPage() {
                                       onChange={() => toggleMultiSelectFilter(column, String(value))}
                                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                     />
-                                    <span className="truncate text-gray-700 font-medium">{String(value).substring(0, 20)}</span>
+                                    <span className="truncate text-gray-700 font-medium" title={String(value)}>{String(value)}</span>
                                   </label>
                                 );
                               })}
-                            </div>
-                          )}
+                          </div>
                           
-                          {/* Karışık sistem - 10-50 arası değer varsa */}
-                          {filterType === 'mixed' && (
-                            <>
-                              <input
-                                type="text"
-                                placeholder="Arama..."
-                                value={filters[`${column}_search`] || ''}
-                                onChange={(e) => setFilters(prev => ({ 
-                                  ...prev, 
-                                  [`${column}_search`]: e.target.value 
-                                }))}
-                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:border-gray-400 transition-colors"
-                              />
-                              <div className="max-h-24 overflow-y-auto space-y-2 p-2 bg-gray-50 rounded-lg border border-gray-200">
-                                {uniqueValues
-                                  .filter(value => 
-                                    !filters[`${column}_search`] || 
-                                    String(value).toLowerCase().includes(filters[`${column}_search`].toLowerCase())
-                                  )
-                                  .slice(0, 15)
-                                  .map((value, index) => {
-                                    const isSelected = (multiSelectFilters[column] || []).includes(String(value));
-                                    return (
-                                      <label key={index} className="flex items-center space-x-2 cursor-pointer text-xs hover:bg-white hover:shadow-sm p-1 rounded transition-all">
-                                        <input
-                                          type="checkbox"
-                                          checked={isSelected}
-                                          onChange={() => toggleMultiSelectFilter(column, String(value))}
-                                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                        />
-                                        <span className="truncate text-gray-700 font-medium">{String(value).substring(0, 20)}</span>
-                                      </label>
-                                    );
-                                  })}
-                              </div>
-                            </>
-                          )}
-                          
-                          {/* Sadece arama - 50'den fazla değer varsa */}
-                          {filterType === 'search' && (
-                            <input
-                              type="text"
-                              placeholder="Arama..."
-                              value={filters[column] || ''}
-                              onChange={(e) => setFilters(prev => ({ ...prev, [column]: e.target.value }))}
-                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white hover:border-gray-400 transition-colors"
-                            />
-                          )}
+                          {/* Eski modlar (checkbox/mixed/search) kaldırıldı; tekleşmiş UI kullanılıyor */}
                         </div>
                       )}
                       
@@ -2308,10 +2310,11 @@ export default function ReportDetailPage() {
                            <ChartCard 
                              type={type} 
                              data={chartData} 
-                             title={`${cfg.y_axis} - ${cfg.x_axis}`} 
+                             title={cfg.name || `${cfg.y_axis} - ${cfg.x_axis}`} 
                              height={cfg.height || 480}
                              isEditMode={isAdminOrSuper}
                              editConfig={cfg}
+                             analyzeData={analyzeData}
                              onSave={async (updatedConfig) => {
                                try {
                                  const payload = {
@@ -2472,7 +2475,29 @@ export default function ReportDetailPage() {
                       <tr>
                         {queryResult?.results[0] && Object.keys(queryResult.results[0]).map((column) => (
                           <th key={column} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap bg-gray-50 border-b border-gray-200">
-                            {column}
+                            <button
+                              onClick={() => handleSort(column)}
+                              className="flex items-center gap-1 hover:text-gray-700 transition-colors group w-full text-left"
+                              title={`${column} kolununu sırala`}
+                            >
+                              <span className="truncate">{column}</span>
+                              <div className="flex flex-col opacity-50 group-hover:opacity-100 transition-opacity">
+                                <svg 
+                                  className={`w-3 h-3 ${sortColumn === column && sortDirection === 'asc' ? 'text-blue-600' : 'text-gray-400'}`} 
+                                  fill="currentColor" 
+                                  viewBox="0 0 20 20"
+                                >
+                                  <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
+                                </svg>
+                                <svg 
+                                  className={`w-3 h-3 -mt-1 ${sortColumn === column && sortDirection === 'desc' ? 'text-blue-600' : 'text-gray-400'}`} 
+                                  fill="currentColor" 
+                                  viewBox="0 0 20 20"
+                                >
+                                  <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                                </svg>
+                              </div>
+                            </button>
                           </th>
                         ))}
                       </tr>

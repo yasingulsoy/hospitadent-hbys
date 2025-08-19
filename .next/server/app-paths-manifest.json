@@ -1,8 +1,7 @@
 {
+  "/reports/page": "app/reports/page.js",
   "/page": "app/page.js",
   "/reports/[id]/page": "app/reports/[id]/page.js",
-  "/admin/page": "app/admin/page.js",
-  "/admin/database/page": "app/admin/database/page.js",
-  "/admin/queries/new/page": "app/admin/queries/new/page.js",
-  "/admin/queries/page": "app/admin/queries/page.js"
+  "/admin/queries/page": "app/admin/queries/page.js",
+  "/admin/page": "app/admin/page.js"
 }

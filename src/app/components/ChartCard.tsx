@@ -15,10 +15,12 @@ import {
 	CartesianGrid,
 	Tooltip,
 	Legend,
+	ComposedChart,
+	Area,
 } from 'recharts';
 import { Edit, X, Save, RotateCcw, Trash2 } from 'lucide-react';
 
-type ChartType = 'bar' | 'line' | 'pie';
+type ChartType = 'bar' | 'line' | 'pie' | 'multi-line' | 'area';
 
 export interface ChartDatum {
 	label: string;
@@ -26,9 +28,15 @@ export interface ChartDatum {
 	count?: number;
 }
 
+// Çoklu seri için yeni interface
+export interface MultiSeriesDatum {
+	label: string;
+	[key: string]: number | string;
+}
+
 interface ChartCardProps {
 	type: ChartType;
-	data: ChartDatum[];
+	data: ChartDatum[] | MultiSeriesDatum[];
 	title?: string;
 	height?: number;
 	onEdit?: (config: any) => void;
@@ -37,6 +45,8 @@ interface ChartCardProps {
 	onDelete?: (config: any) => void;
 	editConfig?: any;
 	isEditMode?: boolean;
+	analyzeData?: any; // Mevcut veri kolonları için
+	seriesKeys?: string[]; // Çoklu seri için anahtar dizisi
 }
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4', '#84CC16', '#F97316'];
@@ -51,10 +61,13 @@ export default function ChartCard({
 	onCancel,
 	onDelete,
 	editConfig,
-	isEditMode = false
+	isEditMode = false,
+	analyzeData,
+	seriesKeys
 }: ChartCardProps) {
 	const safeData = Array.isArray(data) ? data : [];
 	const [isFlipped, setIsFlipped] = useState(false);
+	const [isEditorOpen, setIsEditorOpen] = useState(false);
 	const [localEditConfig, setLocalEditConfig] = useState(editConfig || {});
 
 	// editConfig değiştiğinde localEditConfig'i güncelle
@@ -67,7 +80,9 @@ export default function ChartCard({
 	// Görsellik için veri sınırlandırma ve efsane (legend) yoğunluğunu azaltma
 	const displayedData = useMemo(() => {
 		if (type === 'pie') {
-			const sorted = [...safeData].sort((a, b) => b.value - a.value);
+			// ChartDatum tipindeki veriler için sıralama
+			const chartData = safeData as ChartDatum[];
+			const sorted = [...chartData].sort((a, b) => (b.value || 0) - (a.value || 0));
 			if (sorted.length > 12) {
 				const top = sorted.slice(0, 11);
 				const other = sorted.slice(11).reduce((sum, d) => sum + (d.value || 0), 0);
@@ -80,31 +95,118 @@ export default function ChartCard({
 	}, [safeData, type]);
 
 	const bottomMargin = displayedData.length > 10 ? 90 : 50;
-	const MIN_ITEM_WIDTH = 88; // yatay görünümde daha ferah
-	const minWidth = type === 'pie' ? 720 : Math.max(960, displayedData.length * MIN_ITEM_WIDTH);
+	const MIN_ITEM_WIDTH = 120; // Yatay görünümde daha ferah, isimler net görünsün
+	const minWidth = type === 'pie' ? 1200 : Math.max(1200, displayedData.length * MIN_ITEM_WIDTH); // Pie chart için daha geniş
 
-	// Scroll ile zoom/kaydırma için ölçek durumları
+	// Pie chart için özel yükseklik ayarı
+	const chartHeight = type === 'pie' ? Math.max(height, 600) : height;
+
+	// Yatay genişlik ölçeği: X ekseni sıkışıklığını kullanıcı genişletebilsin
+	const [widthScale, setWidthScale] = useState(1);
+	const minWidthScale = 1; // minimum: mevcut minWidth
+	const maxWidthScale = 6; // maksimum: 6x genişlik (daha fazla genişletme imkanı)
+
+	// Zoom ve pan için state'ler
 	const [zoomScale, setZoomScale] = useState(1);
-	const minScale = 0.6;
-	const maxScale = 3;
+	const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+	const [isDragging, setIsDragging] = useState(false);
+	const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+	
+	const minScale = 0.5;
+	const maxScale = 4;
+	
+	// Zoom fonksiyonları
+	const handleZoomIn = () => {
+		setZoomScale(prev => Math.min(maxScale, prev * 1.2));
+		// Zoom sonrası pan'i sıfırla
+		setTimeout(() => setPanOffset({ x: 0, y: 0 }), 150);
+	};
+	
+	const handleZoomOut = () => {
+		setZoomScale(prev => Math.max(minScale, prev / 1.2));
+		// Zoom sonrası pan'i sıfırla
+		setTimeout(() => setPanOffset({ x: 0, y: 0 }), 150);
+	};
+	
+	const handleResetZoom = () => {
+		setZoomScale(1);
+		setPanOffset({ x: 0, y: 0 });
+		setWidthScale(1);
+	};
+	
+	// Mouse ile sürükleme fonksiyonları
+	const handleMouseDown = (e: React.MouseEvent) => {
+		if (e.button === 0) { // Sol tık
+			setIsDragging(true);
+			setDragStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
+		}
+	};
+	
+	const handleMouseMove = (e: React.MouseEvent) => {
+		if (isDragging) {
+			const newX = e.clientX - dragStart.x;
+			const newY = e.clientY - dragStart.y;
+			
+			// Pan sınırlarını kontrol et
+			const maxPanX = Math.max(0, (scaledWidth - 480) / 2);
+			const maxPanY = Math.max(0, (scaledHeight - height) / 2);
+			
+			setPanOffset({
+				x: Math.max(-maxPanX, Math.min(maxPanX, newX)),
+				y: Math.max(-maxPanY, Math.min(maxPanY, newY))
+			});
+		}
+	};
+	
+	const handleMouseUp = () => {
+		setIsDragging(false);
+	};
+
+	// Genişletme tutamacı: sadece genişliği ölçekler
+	const [isResizing, setIsResizing] = useState(false);
+	const [resizeStartX, setResizeStartX] = useState(0);
+
+	const handleResizeMouseDown = (e: React.MouseEvent) => {
+		setIsResizing(true);
+		setResizeStartX(e.clientX);
+		e.stopPropagation();
+	};
+
+	const handleResizeMouseMove = (e: React.MouseEvent) => {
+		if (!isResizing) return;
+		const deltaX = e.clientX - resizeStartX;
+		const containerBaseWidth = Math.max(minWidth, 480) * zoomScale;
+		const nextScale = containerBaseWidth > 0 ? (containerBaseWidth + deltaX) / containerBaseWidth : 1;
+		const clamped = Math.min(maxWidthScale, Math.max(minWidthScale, Number(nextScale.toFixed(3))));
+		setWidthScale(clamped);
+	};
+
+	const handleResizeMouseUp = () => {
+		setIsResizing(false);
+	};
+	
+	// Mouse wheel ile zoom (sayfa kaymasını engellemeden)
 	const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
-		// Chart üzerinde scroll yaparken sayfa kaymasını engelle
-		e.preventDefault();
-		const delta = e.deltaY;
-		setZoomScale(prev => {
-			const next = delta < 0 ? prev * 1.08 : prev / 1.08; // yumuşak zoom
-			return Math.min(maxScale, Math.max(minScale, Number(next.toFixed(3))));
-		});
+		if (e.ctrlKey || e.metaKey) { // Ctrl/Cmd + wheel ile zoom
+			e.preventDefault();
+			const delta = e.deltaY;
+			setZoomScale(prev => {
+				const next = delta < 0 ? prev * 1.1 : prev / 1.1;
+				return Math.min(maxScale, Math.max(minScale, Number(next.toFixed(3))));
+			});
+			// Zoom sonrası pan'i sıfırla
+			setTimeout(() => setPanOffset({ x: 0, y: 0 }), 150);
+		}
 	}, []);
 
-	const scaledWidth = Math.max(minWidth, 480) * zoomScale;
-	const scaledHeight = height * zoomScale;
-	const formatLabel = (value: string) => (value?.length > 14 ? `${value.slice(0, 14)}…` : value);
+	const scaledWidth = Math.max(minWidth, 600) * zoomScale * widthScale; // Minimum genişliği artırdım
+	const scaledHeight = chartHeight * zoomScale; // Pie chart için özel yükseklik
+	const formatLabel = (value: string) => (value?.length > 20 ? `${value.slice(0, 20)}…` : value); // Daha uzun isimler için
 	
 	// Daha iyi görünürlük için renk ayarları
 	const labelColor = '#1F2937'; // Koyu gri
-	const gridColor = '#E5E7EB'; // Açık gri
-	const axisColor = '#374151'; // Orta gri
+	const gridColor = 'rgba(229, 231, 235, 0.2)'; // Daha şeffaf açık gri
+	const axisColor = '#1F2937'; // Daha koyu gri
 
 	// Tooltip için özel stil
 	const CustomTooltip = ({ active, payload, label }: any) => {
@@ -112,9 +214,11 @@ export default function ChartCard({
 			return (
 				<div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3">
 					<p className="text-gray-800 font-medium">{`${label}`}</p>
-					<p className="text-blue-600 font-semibold">
-						{`Değer: ${payload[0].value}`}
-					</p>
+					{payload.map((entry: any, index: number) => (
+						<p key={index} className="text-blue-600 font-semibold" style={{ color: entry.color }}>
+							{`${entry.name}: ${entry.value}`}
+						</p>
+					))}
 				</div>
 			);
 		}
@@ -124,7 +228,9 @@ export default function ChartCard({
 	const CustomLegend = (props: any) => {
 		const { payload } = props || {};
 		return (
-			<div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto pr-2 text-xs">
+			<div className={`grid gap-2 max-h-40 overflow-y-auto pr-2 text-xs ${
+				type === 'pie' ? 'grid-cols-4 md:grid-cols-6 lg:grid-cols-8' : 'grid-cols-2 md:grid-cols-3'
+			}`}>
 				{(payload || []).map((entry: any, idx: number) => (
 					<div key={idx} className="flex items-center gap-2">
 						<span className="inline-block w-3 h-3 rounded-sm" style={{ background: entry.color }} />
@@ -135,10 +241,12 @@ export default function ChartCard({
 		);
 	};
 
-	const handleFlip = () => {
-		if (isEditMode) {
-			setIsFlipped(!isFlipped);
-		}
+	const handleOpenEditor = () => {
+		if (isEditMode) setIsEditorOpen(true);
+	};
+
+	const handleCloseEditor = () => {
+		setIsEditorOpen(false);
 	};
 
 	const handleSave = () => {
@@ -158,19 +266,19 @@ export default function ChartCard({
 				height: localEditConfig.height || editConfig?.height || height
 			};
 			onSave(updatedConfig);
-			setIsFlipped(false);
+			setIsEditorOpen(false);
 		}
 	};
 
 	const handleCancel = () => {
 		setLocalEditConfig(editConfig || {});
-		setIsFlipped(false);
+		setIsEditorOpen(false);
 		if (onCancel) onCancel();
 	};
 
 	// Edit form render
 	const renderEditForm = () => (
-		<div className="p-5 h-full flex flex-col min-h-[700px]">
+		<div className="p-5 h-full flex flex-col">
 			<div className="flex items-center justify-between mb-4">
 				<h3 className="text-lg font-semibold text-gray-800">Grafik Ayarlarını Düzenle</h3>
 				<button
@@ -180,8 +288,9 @@ export default function ChartCard({
 					<X className="h-5 w-5" />
 				</button>
 			</div>
-			
-			<div className="flex-1 space-y-4 overflow-y-auto pr-2 max-h-[500px]">
+
+			{/* Form içeriği - kendi içinde kaydırılabilir */}
+			<div className="flex-1 space-y-4 overflow-y-auto pr-2">
 				{/* Grafik Adı */}
 				<div>
 					<label className="block text-sm font-medium text-gray-700 mb-2">Grafik Adı *</label>
@@ -189,7 +298,7 @@ export default function ChartCard({
 						type="text"
 						value={localEditConfig.name || ''}
 						onChange={(e) => setLocalEditConfig({...localEditConfig, name: e.target.value})}
-						className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+						className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
 						placeholder="Grafik için açıklayıcı bir isim girin"
 					/>
 				</div>
@@ -200,38 +309,48 @@ export default function ChartCard({
 					<select
 						value={localEditConfig.chart_type || type}
 						onChange={(e) => setLocalEditConfig({...localEditConfig, chart_type: e.target.value})}
-						className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+						className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
 					>
 						<option value="bar">Bar Grafik (Sütun)</option>
 						<option value="line">Çizgi Grafik (Trend)</option>
 						<option value="pie">Pasta Grafik (Dağılım)</option>
 						<option value="area">Alan Grafik (Dolgu)</option>
 						<option value="scatter">Dağılım Grafik (Korelasyon)</option>
+						<option value="multi-line">Çoklu Seri Çizgi Grafik</option>
 					</select>
 				</div>
 
 				{/* X Ekseni */}
 				<div>
 					<label className="block text-sm font-medium text-gray-700 mb-2">X Ekseni (Kategori/Tarih) *</label>
-					<input
-						type="text"
+					<select
 						value={localEditConfig.x_axis || ''}
 						onChange={(e) => setLocalEditConfig({...localEditConfig, x_axis: e.target.value})}
-						className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-						placeholder="Kategori veya tarih kolonu adı"
-					/>
+						className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+					>
+						<option value="">Kategori veya tarih kolonu seçin</option>
+						{analyzeData?.categoricalColumns?.map((col: string) => (
+							<option key={col} value={col}>{col}</option>
+						))}
+						{analyzeData?.dateColumns?.map((col: string) => (
+							<option key={col} value={col}>{col} (Tarih)</option>
+						))}
+					</select>
 				</div>
 
 				{/* Y Ekseni */}
 				<div>
 					<label className="block text-sm font-medium text-gray-700 mb-2">Y Ekseni (Sayısal Değer) *</label>
-					<input
-						type="text"
+					<select
 						value={localEditConfig.y_axis || ''}
 						onChange={(e) => setLocalEditConfig({...localEditConfig, y_axis: e.target.value})}
-						className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-						placeholder="Sayısal değer kolonu adı"
-					/>
+						className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+					>
+						<option value="">Sayısal değer kolonu seçin</option>
+						{analyzeData?.numericColumns?.map((col: string) => (
+							<option key={col} value={col}>{col}</option>
+						))}
+					</select>
 				</div>
 
 				{/* Toplama Yöntemi */}
@@ -240,7 +359,7 @@ export default function ChartCard({
 					<select
 						value={localEditConfig.aggregation || 'sum'}
 						onChange={(e) => setLocalEditConfig({...localEditConfig, aggregation: e.target.value})}
-						className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+						className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
 					>
 						<option value="sum">Toplam (Değerleri topla)</option>
 						<option value="count">Sayı (Kayıt sayısı)</option>
@@ -253,13 +372,16 @@ export default function ChartCard({
 				{/* Gruplama */}
 				<div>
 					<label className="block text-sm font-medium text-gray-700 mb-2">Gruplama Kolonu</label>
-					<input
-						type="text"
+					<select
 						value={localEditConfig.group_by || ''}
 						onChange={(e) => setLocalEditConfig({...localEditConfig, group_by: e.target.value})}
-						className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-						placeholder="Boş bırakılırsa X ekseni kullanılır"
-					/>
+						className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+					>
+						<option value="">Boş bırakılırsa X ekseni kullanılır</option>
+						{analyzeData?.categoricalColumns?.map((col: string) => (
+							<option key={col} value={col}>{col}</option>
+						))}
+					</select>
 					<p className="text-xs text-gray-500 mt-1">Verileri gruplamak için kullanılacak kolon</p>
 				</div>
 
@@ -269,7 +391,7 @@ export default function ChartCard({
 					<select
 						value={localEditConfig.sort_by || 'desc'}
 						onChange={(e) => setLocalEditConfig({...localEditConfig, sort_by: e.target.value})}
-						className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+						className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
 					>
 						<option value="desc">Azalan (Büyükten Küçüğe)</option>
 						<option value="asc">Artan (Küçükten Büyüğe)</option>
@@ -283,7 +405,7 @@ export default function ChartCard({
 						type="number"
 						value={localEditConfig.height || height}
 						onChange={(e) => setLocalEditConfig({...localEditConfig, height: parseInt(e.target.value)})}
-						className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+						className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
 						min="200"
 						max="800"
 						step="20"
@@ -309,7 +431,8 @@ export default function ChartCard({
 				</div>
 			</div>
 
-			<div className="flex gap-3 pt-4 border-t border-gray-200">
+			{/* Alt aksiyon çubuğu - her zaman görünür */}
+			<div className="flex gap-3 pt-4 border-t border-gray-200 sticky bottom-0 bg-white mt-4">
 				<button
 					onClick={handleSave}
 					className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
@@ -333,83 +456,204 @@ export default function ChartCard({
 			{title && (
 				<h3 className="text-lg font-semibold mb-4 text-gray-800">{title}</h3>
 			)}
-			<div className="overflow-auto group relative" onWheel={handleWheel} style={{ overscrollBehavior: 'contain' }}>
+			<div 
+				className="overflow-hidden group relative" 
+				onWheel={handleWheel}
+				onMouseDown={handleMouseDown}
+				onMouseMove={handleMouseMove}
+				onMouseUp={handleMouseUp}
+				onMouseLeave={handleMouseUp}
+				onMouseMoveCapture={handleResizeMouseMove}
+				onMouseUpCapture={handleResizeMouseUp}
+				style={{ 
+					overscrollBehavior: 'contain',
+					cursor: isDragging ? 'grabbing' : 'grab'
+				}}
+			>
 				{/* Ölçekli kapsayıcı: genişlik ve yükseklik zoom ile orantılı büyütülür */}
-				<div style={{ width: scaledWidth, height: scaledHeight, transition: 'width 150ms ease-out, height 150ms ease-out' }}>
-					<ResponsiveContainer>
-						{type === 'bar' ? (
-							<BarChart data={displayedData} margin={{ top: 10, right: 20, left: 10, bottom: bottomMargin }} barCategoryGap={"25%"}>
-								<CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
-								<XAxis 
-									dataKey="label" 
-									angle={-30} 
-									textAnchor="end" 
-									interval={0} 
-									height={bottomMargin} 
-									tick={{ fontSize: 12, fill: axisColor, fontWeight: 500 }} 
-									tickFormatter={formatLabel}
-									axisLine={{ stroke: axisColor }}
-								/>
-								<YAxis 
-									tick={{ fill: axisColor, fontSize: 12, fontWeight: 500 }} 
-									axisLine={{ stroke: axisColor }}
-								/>
-								<Tooltip content={<CustomTooltip />} />
-								<Bar dataKey="value" fill="#3B82F6" radius={[4, 4, 0, 0]} />
-							</BarChart>
-						) : type === 'line' ? (
-							<LineChart data={displayedData} margin={{ top: 10, right: 20, left: 10, bottom: bottomMargin }}>
-								<CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
-								<XAxis 
-									dataKey="label" 
-									angle={-30} 
-									textAnchor="end" 
-									interval={0} 
-									height={bottomMargin} 
-									tick={{ fontSize: 12, fill: axisColor, fontWeight: 500 }} 
-									tickFormatter={formatLabel}
-									axisLine={{ stroke: axisColor }}
-								/>
-								<YAxis 
-									tick={{ fill: axisColor, fontSize: 12, fontWeight: 500 }} 
-									axisLine={{ stroke: axisColor }}
-								/>
-								<Tooltip content={<CustomTooltip />} />
-								<Line type="monotone" dataKey="value" stroke="#3B82F6" strokeWidth={3} dot={{ r: 3, fill: '#3B82F6' }} />
-							</LineChart>
-						) : (
-							<PieChart>
-								<Tooltip content={<CustomTooltip />} />
-								<Legend content={<CustomLegend />} />
-								<Pie 
-									data={displayedData} 
-									dataKey="value" 
-									nameKey="label" 
-									cx="50%" 
-									cy="45%" 
-									innerRadius={60} 
-									outerRadius={100} 
-									paddingAngle={2} 
-									labelLine={{ stroke: axisColor, strokeWidth: 1 }}
-									label={({ percent, name }) => `${name}: ${Math.round((percent || 0) * 100)}%`}
-								>
-									{displayedData.map((_, index) => (
-										<Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+				<div style={{ 
+					width: scaledWidth, 
+					height: scaledHeight, 
+					transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
+					transition: isDragging ? 'none' : 'width 150ms ease-out, height 150ms ease-out',
+					transformOrigin: 'center'
+				}}>
+					{type === 'pie' ? (
+						<div style={{ 
+							width: '100%', 
+							height: '100%', 
+							display: 'flex', 
+							flexDirection: 'column',
+							alignItems: 'center', 
+							justifyContent: 'space-between',
+							padding: '20px'
+						}}>
+							<div style={{ flex: 1, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+								<ResponsiveContainer width="100%" height="100%">
+									<PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+										<Tooltip content={<CustomTooltip />} />
+										<Pie 
+											data={displayedData} 
+											dataKey="value" 
+											nameKey="label" 
+											cx="50%" 
+											cy="50%" 
+											innerRadius="20%" 
+											outerRadius="85%" 
+											paddingAngle={2} 
+											labelLine={{ stroke: axisColor, strokeWidth: 1.5 }}
+											label={({ percent, name, value }) => `${name}: ${value} (${Math.round((percent || 0) * 100)}%)`}
+										>
+											{displayedData.map((_, index) => (
+												<Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+											))}
+										</Pie>
+									</PieChart>
+								</ResponsiveContainer>
+							</div>
+							<div style={{ width: '100%', marginTop: '20px' }}>
+								<CustomLegend payload={displayedData.map((item, index) => ({
+									value: item.label,
+									color: COLORS[index % COLORS.length]
+								}))} />
+							</div>
+						</div>
+					) : (
+						<ResponsiveContainer width="100%" height="100%">
+							{type === 'bar' ? (
+								<BarChart data={displayedData} margin={{ top: 10, right: 30, left: 20, bottom: bottomMargin }} barCategoryGap={"20%"} barGap={2}>
+									<CartesianGrid strokeDasharray="3 3" stroke={gridColor} strokeWidth={0.5} />
+									<XAxis 
+										dataKey="label" 
+										angle={-45} 
+										textAnchor="end" 
+										interval={0} 
+										height={bottomMargin} 
+										tick={{ fontSize: 12, fill: axisColor, fontWeight: 600 }} 
+										tickFormatter={formatLabel}
+										axisLine={{ stroke: axisColor }}
+										tickMargin={10}
+									/>
+									<YAxis 
+										tick={{ fill: axisColor, fontSize: 12, fontWeight: 600 }} 
+										axisLine={{ stroke: axisColor }}
+										tickMargin={10}
+									/>
+									<Tooltip content={<CustomTooltip />} cursor={false} />
+									<Bar dataKey="value" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+								</BarChart>
+							) : type === 'line' ? (
+								<LineChart data={displayedData} margin={{ top: 10, right: 30, left: 20, bottom: bottomMargin }}>
+									<CartesianGrid strokeDasharray="3 3" stroke={gridColor} strokeWidth={0.5} />
+									<XAxis 
+										dataKey="label" 
+										angle={-45} 
+										textAnchor="end" 
+										interval={0} 
+										height={bottomMargin} 
+										tick={{ fontSize: 12, fill: axisColor, fontWeight: 600 }} 
+										tickFormatter={formatLabel}
+										axisLine={{ stroke: axisColor }}
+										tickMargin={10}
+									/>
+									<YAxis 
+										tick={{ fill: axisColor, fontSize: 12, fontWeight: 600 }} 
+										axisLine={{ stroke: axisColor }}
+										tickMargin={10}
+									/>
+									<Tooltip content={<CustomTooltip />} cursor={false} />
+									<Line type="monotone" dataKey="value" stroke="#3B82F6" strokeWidth={3} dot={{ r: 4, fill: '#3B82F6' }} />
+								</LineChart>
+							) : (
+								<ComposedChart data={safeData} margin={{ top: 10, right: 30, left: 20, bottom: bottomMargin }}>
+									<CartesianGrid strokeDasharray="3 3" stroke={gridColor} strokeWidth={0.5} />
+									<XAxis 
+										dataKey="label" 
+										angle={-45} 
+										textAnchor="end" 
+										interval={0} 
+										height={bottomMargin} 
+										tick={{ fontSize: 12, fill: axisColor, fontWeight: 600 }} 
+										tickFormatter={formatLabel}
+										axisLine={{ stroke: axisColor }}
+										tickMargin={10}
+									/>
+									<YAxis 
+										tick={{ fill: axisColor, fontSize: 12, fontWeight: 600 }} 
+										axisLine={{ stroke: axisColor }}
+										tickMargin={10}
+									/>
+									<Tooltip content={<CustomTooltip />} cursor={false} />
+									<Legend content={<CustomLegend />} />
+									{seriesKeys?.map((key, index) => (
+										<Line 
+											key={key}
+											type="monotone" 
+											dataKey={key} 
+											stroke={COLORS[index % COLORS.length]} 
+											strokeWidth={3} 
+											dot={{ r: 4, fill: COLORS[index % COLORS.length] }} 
+										/>
 									))}
-								</Pie>
-							</PieChart>
-						)}
-					</ResponsiveContainer>
+								</ComposedChart>
+							)}
+						</ResponsiveContainer>
+					)}
 				</div>
-				{/* Zoom göstergesi */}
-				<div className="absolute right-3 bottom-3 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
-					<span className="text-xs bg-gray-800 text-white px-2 py-1 rounded-md font-medium">{Math.round(zoomScale * 100)}%</span>
+				{/* Yatay genişletme tutamacı - sadece bar/line grafikler için */}
+				{type !== 'pie' && (
+					<div 
+						onMouseDown={handleResizeMouseDown}
+						className="absolute bottom-2 left-1/2 -translate-x-1/2 w-32 h-4 rounded-full bg-gray-300 hover:bg-gray-400 cursor-ew-resize shadow-sm flex items-center justify-center"
+						title="X eksenini genişletmek için sürükleyin"
+					>
+						<div className="w-16 h-1 bg-gray-500 rounded-full"></div>
+					</div>
+				)}
+				{/* Zoom kontrolleri */}
+				<div className="absolute right-3 bottom-3 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+					{/* Zoom göstergesi */}
+					<span className="text-xs bg-gray-800 text-white px-2 py-1 rounded-md font-medium text-center min-w-[3rem]">
+						{Math.round(zoomScale * 100)}%
+					</span>
+					
+					{/* Zoom butonları */}
+					<div className="flex flex-col gap-1">
+						<button
+							onClick={handleZoomIn}
+							className="w-8 h-8 bg-gray-800 text-white rounded-md hover:bg-gray-700 transition-colors flex items-center justify-center text-sm font-bold shadow-lg"
+							title="Yakınlaştır"
+						>
+							+
+						</button>
+						<button
+							onClick={handleZoomOut}
+							className="w-8 h-8 bg-gray-800 text-white rounded-md hover:bg-gray-700 transition-colors flex items-center justify-center text-sm font-bold shadow-lg"
+							title="Uzaklaştır"
+						>
+							−
+						</button>
+						<button
+							onClick={handleResetZoom}
+							className="w-8 h-8 bg-gray-600 text-white rounded-md hover:bg-gray-500 transition-colors flex items-center justify-center text-xs font-medium shadow-lg"
+							title="Sıfırla"
+						>
+							⟲
+						</button>
+					</div>
 				</div>
 			</div>
 			
-			{/* Action buttons - only show when in edit mode */}
+			{/* Action buttons */}
 			{isEditMode && (
 				<div className="absolute top-3 right-3 flex gap-2">
+					<button
+						onClick={handleOpenEditor}
+						className="p-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors shadow-lg"
+						title="Grafiği Düzenle"
+					>
+						<Edit className="h-4 w-4" />
+					</button>
 					{onDelete && (
 						<button
 							onClick={() => {
@@ -429,7 +673,7 @@ export default function ChartCard({
 	);
 
 	return (
-		<div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden relative">
+		<div className={`bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden relative`}>
 			{/* Card flip container */}
 			<div 
 				className={`relative w-full h-full transition-transform duration-500 transform-style-preserve-3d ${
@@ -440,17 +684,23 @@ export default function ChartCard({
 					transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)'
 				}}
 			>
-				{/* Front side - Chart */}
-				<div className="w-full h-full backface-hidden">
-					{renderChart()}
-				</div>
-				
-				{/* Back side - Edit form */}
-				<div 
-					className="absolute inset-0 w-full h-full backface-hidden"
-					style={{ transform: 'rotateY(180deg)' }}
-				>
-					{renderEditForm()}
+				{/* Content area: chart or inline editor panel */}
+				<div className="w-full h-full">
+					{!isEditorOpen ? (
+						renderChart()
+					) : (
+						<div className="min-h-[520px] h-full overflow-hidden">
+							<div className="p-4 border-b flex items-center justify-between">
+								<h3 className="text-lg font-semibold text-gray-800">Grafik Ayarlarını Düzenle</h3>
+								<button onClick={handleCloseEditor} className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded">
+									<X className="h-5 w-5" />
+								</button>
+							</div>
+							<div className="p-2 overflow-y-auto" style={{ maxHeight: '70vh' }}>
+								{renderEditForm()}
+							</div>
+						</div>
+					)}
 				</div>
 			</div>
 		</div>
