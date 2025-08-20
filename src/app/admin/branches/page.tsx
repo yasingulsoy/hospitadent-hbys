@@ -32,6 +32,7 @@ export default function BranchesPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
   const [formData, setFormData] = useState({
+    id: '',
     name: '',
     code: '',
     province: '',
@@ -73,6 +74,7 @@ export default function BranchesPage() {
       if (data.success) {
         setShowAddModal(false);
         setFormData({
+          id: '',
           name: '',
           code: '',
           province: '',
@@ -132,6 +134,7 @@ export default function BranchesPage() {
   const openEditModal = (branch: Branch) => {
     setSelectedBranch(branch);
     setFormData({
+      id: branch.id.toString(),
       name: branch.name,
       code: branch.code,
       province: branch.province,
@@ -324,8 +327,9 @@ export default function BranchesPage() {
                   <input
                     type="number"
                     min={1}
+                    value={formData.id}
                     placeholder="Boş bırakılırsa otomatik atanır"
-                    onChange={(e) => setFormData({ ...formData, id: e.target.value }) as any}
+                    onChange={(e) => setFormData({ ...formData, id: e.target.value })}
                     className="w-full px-3 py-3 border-2 border-blue-200 rounded-lg bg-white"
                   />
                   <p className="text-xs text-blue-700 mt-2">Belirlerken benzersiz ve pozitif bir sayı olmalıdır. Boş bırakırsanız sistem otomatik atar.</p>

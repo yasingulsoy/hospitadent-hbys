@@ -827,21 +827,7 @@ export default function Home() {
               </div>
             </Link>
 
-            <Link href="/invoices" className="group">
-              <div className="bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 relative overflow-hidden">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="p-3 bg-orange-500 rounded-xl shadow-lg">
-                    <DollarSign className="h-8 w-8 text-white" />
-                  </div>
-                  <span className="text-xs font-semibold bg-orange-100 text-orange-700 px-3 py-1 rounded-full">
-                    Fatura
-                  </span>
-                </div>
-                <h3 className="text-lg font-bold text-gray-900 mb-2">Fatura Yönetimi</h3>
-                <p className="text-sm text-gray-600">Fatura oluştur ve takip et</p>
-                <div className="absolute top-0 right-0 w-16 h-1 bg-gradient-to-l from-orange-500 to-orange-600 rounded-bl-full"></div>
-              </div>
-            </Link>
+
           </div>
         </div>
       </main>

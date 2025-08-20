@@ -48,11 +48,8 @@ router.get('/stats', authenticateToken, async (req, res) => {
       totalPatients,
       totalAppointments,
       totalTreatments,
-      totalInvoices,
-      totalRevenue,
       appointmentStats,
-      treatmentStats,
-      revenueStats
+      treatmentStats
     ] = await Promise.all([
       // Toplam hasta sayısı
       prisma.patient.count({ where }),
@@ -62,20 +59,6 @@ router.get('/stats', authenticateToken, async (req, res) => {
       
       // Toplam tedavi sayısı
       prisma.treatment.count({ where: dateWhere }),
-      
-      // Toplam fatura sayısı
-      prisma.invoice.count({ where: dateWhere }),
-      
-      // Toplam gelir
-      prisma.invoice.aggregate({
-        where: {
-          ...dateWhere,
-          status: 'PAID'
-        },
-        _sum: {
-          total: true
-        }
-      }),
       
       // Randevu istatistikleri
       prisma.appointment.groupBy({
@@ -95,18 +78,6 @@ router.get('/stats', authenticateToken, async (req, res) => {
         },
         _sum: {
           cost: true
-        }
-      }),
-      
-      // Gelir istatistikleri
-      prisma.invoice.groupBy({
-        by: ['status'],
-        where: dateWhere,
-        _sum: {
-          total: true
-        },
-        _count: {
-          status: true
         }
       })
     ]);
@@ -143,12 +114,11 @@ router.get('/stats', authenticateToken, async (req, res) => {
           totalPatients,
           totalAppointments,
           totalTreatments,
-          totalInvoices,
-          totalRevenue: totalRevenue._sum.total || 0
+
         },
         appointments: appointmentStatuses,
         treatments: treatmentTypes,
-        revenue: revenueStatuses
+
       }
     });
 
@@ -984,7 +954,13 @@ function buildWhereClauseFromParams(assignedFilters, userParams) {
 			const paramKey = content.param; // UI tarafı bu anahtarla göndersin
 			if (!columnName || !paramKey) continue;
 			const val = userParams?.[paramKey];
-			if (val === undefined || val === null || (Array.isArray(val) && val.length === 0)) continue;
+			
+			// Sadece seçilen filtreler için WHERE clause oluştur
+			// Boş veya undefined değerler için filtre atlanır
+			if (val === undefined || val === null || (Array.isArray(val) && val.length === 0)) {
+				continue; // Bu filtreyi atla
+			}
+			
 			if (Array.isArray(val)) {
 				// IN listesi için placeholder'ları genişlet
 				const flatVals = val.map(v => (typeof v === 'string' && !Number.isNaN(Number(v)) ? Number(v) : v));
@@ -1007,6 +983,8 @@ function buildWhereClauseFromParams(assignedFilters, userParams) {
 			if (!columnName || (!startKey && !endKey)) continue;
 			const startVal = startKey ? userParams?.[startKey] : undefined;
 			const endVal = endKey ? userParams?.[endKey] : undefined;
+			
+			// Sadece tarih değerleri varsa WHERE clause ekle
 			if (startVal && endVal) {
 				// BETWEEN yerine >= ve <= kullanmak bazı sürümlerde daha stabil
 				whereClauses.push(`${columnName} >= ?`);
@@ -1058,12 +1036,30 @@ router.post('/execute/:id/with-filters', authenticateToken, async (req, res) => 
 
 		// Bu rapora bağlı filtreleri çek
 		const rfRes = await pool.query(
-			`SELECT rf.filter_id, f.filter_name, f.content
+			`SELECT rf.filter_id, rf.is_required, f.filter_name, f.content
 			 FROM report_filters rf JOIN filters f ON f.id = rf.filter_id
 			 WHERE rf.report_key = $1`,
 			[reportKey]
 		);
 		const assignedFilters = rfRes.rows || [];
+
+		// Zorunlu parametre anahtarlarını tespit et (sadece is_required olanlar)
+		const requiredParamKeys = [];
+		for (const af of assignedFilters) {
+			let content;
+			try {
+				content = typeof af.content === 'object' ? af.content : JSON.parse(af.content);
+			} catch (_) {
+				continue;
+			}
+			if (!af.is_required) continue;
+			if (content?.type === 'select' && content?.param) {
+				requiredParamKeys.push(content.param);
+			} else if (content?.type === 'date_range') {
+				if (content?.params?.start) requiredParamKeys.push(content.params.start);
+				if (content?.params?.end) requiredParamKeys.push(content.params.end);
+			}
+		}
 
 		// Kullanıcı parametreleri
 		const { params = {} } = req.body || {};
@@ -1081,13 +1077,40 @@ router.post('/execute/:id/with-filters', authenticateToken, async (req, res) => 
 		let appliedWhere; // whereSQL bilgisini sadece eski mantıkta dolduracağız
 		if (namedKeys.length > 0) {
 			useNamed = true;
-			// Eksik parametre kontrolü
-			const missing = namedKeys.filter(k => !(k in params));
-			if (missing.length > 0) {
-				return res.status(400).json({ success: false, message: `Eksik parametre(ler): ${missing.join(', ')}` });
+			// Sadece zorunlu olan parametreler için eksik kontrolü yap
+			const missingRequired = requiredParamKeys
+				.filter(k => namedKeys.includes(k))
+				.filter(k => !(k in params) || params[k] === '' || params[k] === null || (Array.isArray(params[k]) && params[k].length === 0));
+			if (missingRequired.length > 0) {
+				return res.status(400).json({ success: false, message: `Eksik zorunlu parametre(ler): ${missingRequired.join(', ')}` });
 			}
-			// Sadece kullanılanları al
-			executeParams = namedKeys.reduce((acc, k) => { acc[k] = params[k]; return acc; }, {});
+			// Tüm adlandırılmış placeholder'ları bağla; gönderilmeyenler NULL olarak geçsin
+			executeParams = namedKeys.reduce((acc, k) => {
+				const v = params[k];
+				acc[k] = (v === undefined || v === '') ? null : v;
+				return acc;
+			}, {});
+
+			// Opsiyonel filtreler için :has_{param} bayrağı ekle (yalnızca gerçek parametreler için)
+			const baseParamKeys = namedKeys.filter(k => !k.startsWith('has_'));
+			for (const k of baseParamKeys) {
+				const v = params[k];
+				const isEmptyArray = Array.isArray(v) && v.length === 0;
+				const isEmpty = v === undefined || v === null || v === '' || isEmptyArray;
+				// SQL'de :has_k kullanılıyorsa üzerine yaz, yoksa da zarar vermez
+				executeParams[`has_${k}`] = isEmpty ? 0 : 1;
+			}
+
+			// Eğer SQL doğrudan :has_* placeholder'ları içeriyorsa ve yukarıda set edilmemişse, tamamla
+			const hasFlagKeys = namedKeys.filter(k => k.startsWith('has_'));
+			for (const hasKey of hasFlagKeys) {
+				if (executeParams[hasKey] !== undefined) continue;
+				const baseKey = hasKey.replace(/^has_/, '');
+				const v = params[baseKey];
+				const isEmptyArray = Array.isArray(v) && v.length === 0;
+				const isEmpty = v === undefined || v === null || v === '' || isEmptyArray;
+				executeParams[hasKey] = isEmpty ? 0 : 1;
+			}
 		} else {
 			// Eski mantık: atanmış filtrelerden WHERE üret ve ekle
 			const { sql: whereSQL, values: whereValues } = buildWhereClauseFromParams(assignedFilters, params);
@@ -1143,6 +1166,9 @@ router.post('/execute/:id/with-filters', authenticateToken, async (req, res) => 
 				finalSql = expanded.sql;
 				executeParams = expanded.params;
 			}
+
+			// Güvenlik: Boş IN parantezleri varsa IN (NULL) ile değiştir
+			finalSql = finalSql.replace(/IN\s*\(\s*\)/gi, 'IN (NULL)');
 			// Genişletme sonrası son SQL ve parametreleri gözlemlemek için ek log
 			try {
 				console.log('🔎 Expanded SQL (after array expansion)', { finalSql, executeParams });
@@ -1457,7 +1483,8 @@ async function getDateBasedDataFromDB(xAxis, yAxis, filters, aggregationMethod) 
       SELECT 
         DATE(${dateField}) as date_label,
         COUNT(*) as count_value,
-        SUM(${yAxis.value}) as sum_value
+        SUM(${yAxis.value}) as sum_value,
+        COUNT(CASE WHEN ${yAxis.value} <> 0 THEN 1 END) as nonzero_count
       FROM ${tableName}
       WHERE ${dateField} IS NOT NULL
       GROUP BY DATE(${dateField})
@@ -1469,9 +1496,11 @@ async function getDateBasedDataFromDB(xAxis, yAxis, filters, aggregationMethod) 
       label: item.date_label,
       value: (aggregationMethod === 'count' || yAxis.type === 'count')
         ? Number(item.count_value)
-        : aggregationMethod === 'avg'
-          ? (Number(item.sum_value) || 0) / (Number(item.count_value) || 1)
-          : Number(item.sum_value) || 0
+        : aggregationMethod === 'count_nonzero'
+          ? Number(item.nonzero_count)
+          : aggregationMethod === 'avg'
+            ? (Number(item.sum_value) || 0) / (Number(item.count_value) || 1)
+            : Number(item.sum_value) || 0
     }));
     
   } catch (error) {
@@ -1512,7 +1541,8 @@ async function getCategoryBasedDataFromDB(xAxis, yAxis, filters, aggregationMeth
       SELECT 
         ${prisma.raw(categoryField)} as category_label,
         COUNT(*) as count_value,
-        SUM(${prisma.raw(yAxis.value)}) as sum_value
+        SUM(${prisma.raw(yAxis.value)}) as sum_value,
+        COUNT(CASE WHEN ${prisma.raw(yAxis.value)} <> 0 THEN 1 END) as nonzero_count
       FROM ${prisma.raw(tableName)}
       ${whereSQL}
       GROUP BY ${prisma.raw(categoryField)}
@@ -1524,9 +1554,11 @@ async function getCategoryBasedDataFromDB(xAxis, yAxis, filters, aggregationMeth
       label: item.category_label || 'Bilinmeyen',
       value: (aggregationMethod === 'count' || yAxis.type === 'count')
         ? Number(item.count_value)
-        : aggregationMethod === 'avg'
-          ? (Number(item.sum_value) || 0) / (Number(item.count_value) || 1)
-          : Number(item.sum_value) || 0
+        : aggregationMethod === 'count_nonzero'
+          ? Number(item.nonzero_count)
+          : aggregationMethod === 'avg'
+            ? (Number(item.sum_value) || 0) / (Number(item.count_value) || 1)
+            : Number(item.sum_value) || 0
     }));
     
   } catch (error) {

@@ -42,7 +42,7 @@ app.use('/api/branches', require('./src/routes/branches'));
 app.use('/api/patients', require('./src/routes/patients'));
 app.use('/api/appointments', require('./src/routes/appointments'));
 app.use('/api/treatments', require('./src/routes/treatments'));
-app.use('/api/invoices', require('./src/routes/invoices'));
+
 app.use('/api/notes', require('./src/routes/notes'));
 app.use('/api/reports', require('./src/routes/reports'));
 app.use('/api/users', require('./src/routes/users'));

@@ -268,6 +268,21 @@ export default function ChartCard({
 		return generateTicks(min, max, zoomScale);
 	}, [yRange, zoomScale]);
 
+	// Tek veri/sabit seri durumunda Y eksenini görünür tutmak için güvenli domain hesapla
+	const yAxisProps = useMemo(() => {
+		if (!yRange) return {} as Record<string, any>;
+		const [min, max] = yRange;
+		if (min === max) {
+			const upper = Math.max(1, Math.ceil(max * 1.2));
+			const lower = Math.min(0, Math.floor(min * 0.8));
+			return { domain: [lower, upper], allowDecimals: false } as Record<string, any>;
+		}
+		if (yTicks && yTicks.length >= 2) {
+			return { ticks: yTicks, domain: [yTicks[0], yTicks[yTicks.length - 1]] } as Record<string, any>;
+		}
+		return {} as Record<string, any>;
+	}, [yRange, yTicks]);
+
 	const CustomLegend = (props: any) => {
 		const { payload } = props || {};
 		return (
@@ -577,7 +592,7 @@ export default function ChartCard({
 										axisLine={{ stroke: axisColor }}
 										tickMargin={10}
 									/>
-									<YAxis tick={{ fill: axisColor, fontSize: 12, fontWeight: 600 }} axisLine={{ stroke: axisColor }} tickMargin={10} allowDecimals {...(yTicks ? { ticks: yTicks, domain: [yTicks[0], yTicks[yTicks.length - 1]] } : {})} />
+									<YAxis tick={{ fill: axisColor, fontSize: 12, fontWeight: 600 }} axisLine={{ stroke: axisColor }} tickMargin={10} allowDecimals {...yAxisProps} />
 									<Tooltip content={<CustomTooltip />} cursor={false} wrapperStyle={{ zIndex: 10000 }} />
 									<Bar dataKey="value" fill="#3B82F6" radius={[4, 4, 0, 0]} />
 								</BarChart>
@@ -595,7 +610,7 @@ export default function ChartCard({
 										axisLine={{ stroke: axisColor }}
 										tickMargin={10}
 									/>
-									<YAxis tick={{ fill: axisColor, fontSize: 12, fontWeight: 600 }} axisLine={{ stroke: axisColor }} tickMargin={10} allowDecimals {...(yTicks ? { ticks: yTicks, domain: [yTicks[0], yTicks[yTicks.length - 1]] } : {})} />
+									<YAxis tick={{ fill: axisColor, fontSize: 12, fontWeight: 600 }} axisLine={{ stroke: axisColor }} tickMargin={10} allowDecimals {...yAxisProps} />
 									<Tooltip content={<CustomTooltip />} cursor={false} wrapperStyle={{ zIndex: 10000 }} />
 									<Line type="monotone" dataKey="value" stroke="#3B82F6" strokeWidth={3} dot={{ r: 4, fill: '#3B82F6' }} />
 								</LineChart>
@@ -613,7 +628,7 @@ export default function ChartCard({
 										axisLine={{ stroke: axisColor }}
 										tickMargin={10}
 									/>
-									<YAxis tick={{ fill: axisColor, fontSize: 12, fontWeight: 600 }} axisLine={{ stroke: axisColor }} tickMargin={10} allowDecimals {...(yTicks ? { ticks: yTicks, domain: [yTicks[0], yTicks[yTicks.length - 1]] } : {})} />
+									<YAxis tick={{ fill: axisColor, fontSize: 12, fontWeight: 600 }} axisLine={{ stroke: axisColor }} tickMargin={10} allowDecimals {...yAxisProps} />
 									<Tooltip content={<CustomTooltip />} cursor={false} wrapperStyle={{ zIndex: 10000 }} />
 									<Legend content={<CustomLegend />} />
 									{seriesKeys?.map((key, index) => (

@@ -120,6 +120,7 @@ export default function ReportDetailPage() {
   const [serverFilterParams, setServerFilterParams] = useState<Record<string, any>>({});
   const [showAddFilterModal, setShowAddFilterModal] = useState(false);
   const [role, setRole] = useState<string | null>(null);
+  const [filterSearch, setFilterSearch] = useState<Record<string, string>>({});
   // Daha kapsamlı admin kontrolü
   const isAdminOrSuper = (
     role === '1' || role === '2' ||
@@ -1019,7 +1020,9 @@ export default function ReportDetailPage() {
         setQueryResult({ success: true, results: rows, message: 'Rapor çalıştırıldı' });
         setFilteredData(rows);
       } else {
-        setError(data?.message || 'Sorgu çalıştırılamadı');
+        console.error('Execute with filters failed:', data);
+        const tech = data?.technicalError ? ` - Detay: ${data.technicalError}` : '';
+        setError((data?.message || 'Sorgu çalıştırılamadı') + tech);
       }
     } catch (err) {
       setError('Sorgu çalıştırılırken hata oluştu');
@@ -1953,7 +1956,18 @@ export default function ReportDetailPage() {
                   const type = af.content?.type;
                   return (
                     <div key={`${af.filter_id}-${key}`} className="p-4 border border-gray-200 rounded-lg">
-                      <div className="text-sm font-medium text-gray-700 mb-2">{af.filter_name}</div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-sm font-medium text-gray-700">{af.filter_name}</div>
+                        {type === 'select' && (
+                          <input
+                            type="text"
+                            value={filterSearch[key] || ''}
+                            onChange={(e) => setFilterSearch(prev => ({ ...prev, [key]: e.target.value }))}
+                            placeholder="Ara..."
+                            className="px-2 py-1 text-xs border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                          />
+                        )}
+                      </div>
                       {type === 'select' && (
                         <div className="space-y-2">
                           {/* Tümünü Seç checkbox'ı */}
@@ -1984,9 +1998,13 @@ export default function ReportDetailPage() {
                             </label>
                           )}
 
-                          {/* Seçenekler - checkbox listesi */}
+                          {/* Seçenekler - checkbox listesi + arama filtresi */}
                           <div className="max-h-44 overflow-auto rounded border border-gray-200 p-2 bg-white">
-                            {(af.content?.options || []).map((opt: any) => {
+                            {((af.content?.options || []).filter((opt: any) => {
+                              const q = (filterSearch[key] || '').toLowerCase();
+                              if (!q) return true;
+                              return String(opt.name).toLowerCase().includes(q);
+                            })).map((opt: any) => {
                               const idVal: any = isNaN(Number(opt.id)) ? opt.id : Number(opt.id);
                               const currentVal = serverFilterParams[af.content?.param];
                               const selectedArr: any[] = Array.isArray(currentVal)

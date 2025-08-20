@@ -340,7 +340,7 @@ router.get('/:id/stats', async (req, res) => {
           patients: 0,
           appointments: 0,
           treatments: 0,
-          invoices: 0
+          appointments: 0
         },
         appointments: {
           total: 0,

@@ -37,7 +37,7 @@ const mockPatients = [
     _count: {
       appointments: 5,
       treatments: 3,
-      invoices: 2
+              appointments: 2
     }
   }
 ];
@@ -215,7 +215,7 @@ router.post('/', authenticateToken, async (req, res) => {
       _count: {
         appointments: 0,
         treatments: 0,
-        invoices: 0
+        appointments: 0
       }
     };
 
@@ -367,7 +367,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     }
 
     // Hasta verisi varsa silmeyi engelle
-    if (patient._count.appointments > 0 || patient._count.treatments > 0 || patient._count.invoices > 0) {
+          if (patient._count.appointments > 0 || patient._count.treatments > 0) {
       return res.status(400).json({
         success: false,
         message: 'Bu hastanın verisi bulunduğu için silinemez. Önce verileri arşivleyin.'

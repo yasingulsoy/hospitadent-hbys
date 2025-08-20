@@ -32,8 +32,9 @@ export default function BranchReturnRateChart() {
 		const loadBranches = async () => {
 			try {
 				const response = await apiGet('/branches');
-				if (response.success) {
-					setBranches(response.data);
+				const data = await response.json();
+				if (data.success) {
+					setBranches(data.data);
 				}
 			} catch (error) {
 				console.error('Şubeler yüklenirken hata:', error);
