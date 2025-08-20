@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { apiGet, apiPost, apiPut, apiDelete } from '../../../lib/api';
-import { Plus, Edit, Trash2, Search } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Copy } from 'lucide-react';
 import Link from 'next/link';
 
 interface Branch {
@@ -43,6 +43,7 @@ export default function BranchesPage() {
     timezone: 'Europe/Istanbul',
     is_active: true
   });
+  const [copiedId, setCopiedId] = useState(false);
 
   // Şubeleri getir
   const fetchBranches = async () => {
@@ -309,12 +310,28 @@ export default function BranchesPage() {
 
       {/* Yeni Şube Ekleme Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <h2 className="text-xl font-semibold mb-4">Yeni Şube Ekle</h2>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 overflow-y-auto">
+          <div className="bg-white rounded-2xl p-8 w-full max-w-3xl mx-4 my-10 shadow-2xl">
+            <h2 className="text-2xl font-semibold mb-6">Yeni Şube Ekle</h2>
             <form onSubmit={handleAddBranch}>
-              <div className="space-y-4">
-                <div>
+              <div className="space-y-6">
+                {/* İsteğe bağlı branch_id alanı */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold bg-blue-100 text-blue-800 rounded-full mr-2">branch_id</span>
+                    Şube ID (opsiyonel)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    placeholder="Boş bırakılırsa otomatik atanır"
+                    onChange={(e) => setFormData({ ...formData, id: e.target.value }) as any}
+                    className="w-full px-3 py-3 border-2 border-blue-200 rounded-lg bg-white"
+                  />
+                  <p className="text-xs text-blue-700 mt-2">Belirlerken benzersiz ve pozitif bir sayı olmalıdır. Boş bırakırsanız sistem otomatik atar.</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Şube Adı *
                   </label>
@@ -325,8 +342,8 @@ export default function BranchesPage() {
                     onChange={(e) => setFormData({...formData, name: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                </div>
-                <div>
+                  </div>
+                  <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Şube Kodu *
                   </label>
@@ -337,8 +354,8 @@ export default function BranchesPage() {
                     onChange={(e) => setFormData({...formData, code: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                </div>
-                <div>
+                  </div>
+                  <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     İl *
                   </label>
@@ -349,8 +366,8 @@ export default function BranchesPage() {
                     onChange={(e) => setFormData({...formData, province: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                </div>
-                <div>
+                  </div>
+                  <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Adres *
                   </label>
@@ -361,8 +378,8 @@ export default function BranchesPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     rows={3}
                   />
-                </div>
-                <div>
+                  </div>
+                  <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Telefon *
                   </label>
@@ -373,8 +390,8 @@ export default function BranchesPage() {
                     onChange={(e) => setFormData({...formData, phone: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                </div>
-                <div>
+                  </div>
+                  <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     E-posta *
                   </label>
@@ -385,8 +402,8 @@ export default function BranchesPage() {
                     onChange={(e) => setFormData({...formData, email: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                </div>
-                <div>
+                  </div>
+                  <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Müdür ID
                   </label>
@@ -397,8 +414,8 @@ export default function BranchesPage() {
                     placeholder="Müdür ID girin (opsiyonel)"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                </div>
-                <div>
+                  </div>
+                  <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Müdür Adı
                   </label>
@@ -409,6 +426,7 @@ export default function BranchesPage() {
                     placeholder="Müdür adı girin (opsiyonel)"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
+                  </div>
                 </div>
                 <div className="flex items-center">
                   <input
@@ -445,11 +463,42 @@ export default function BranchesPage() {
 
       {/* Şube Düzenleme Modal */}
       {showEditModal && selectedBranch && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <h2 className="text-xl font-semibold mb-4">Şube Düzenle</h2>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 overflow-y-auto">
+          <div className="bg-white rounded-2xl p-8 w-full max-w-3xl mx-4 my-10 shadow-2xl max-h-[92vh] overflow-y-auto">
+            <h2 className="text-2xl font-semibold mb-6">Şube Düzenle</h2>
             <form onSubmit={handleUpdateBranch}>
-              <div className="space-y-4">
+              <div className="space-y-6">
+                {/* branch_id alanı */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold bg-blue-100 text-blue-800 rounded-full mr-2">branch_id</span>
+                    Şube ID
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={selectedBranch.id}
+                      disabled
+                      className="w-full px-3 py-3 border-2 border-blue-200 rounded-lg bg-blue-50 text-blue-800 font-mono font-semibold cursor-not-allowed"
+                    />
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(String(selectedBranch.id));
+                          setCopiedId(true);
+                          setTimeout(() => setCopiedId(false), 1500);
+                        }}
+                        className="p-2 rounded-md bg-white/80 hover:bg-white border border-blue-200 text-blue-700"
+                        title="branch_id kopyala"
+                      >
+                        <Copy size={16} />
+                      </button>
+                      <span className="text-xs text-blue-700 font-medium">Otomatik</span>
+                    </div>
+                  </div>
+                  {copiedId && <p className="text-xs text-green-600 mt-2">branch_id kopyalandı</p>}
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Şube Adı *

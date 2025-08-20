@@ -20,7 +20,7 @@ import {
 } from 'recharts';
 import { Edit, X, Save, RotateCcw, Trash2 } from 'lucide-react';
 
-type ChartType = 'bar' | 'line' | 'pie' | 'multi-line' | 'area';
+type ChartType = 'bar' | 'line' | 'pie' | 'multi-line' | 'area' | 'grouped-bar';
 
 export interface ChartDatum {
 	label: string;
@@ -224,6 +224,49 @@ export default function ChartCard({
 		}
 		return null;
 	};
+
+	// Zoom ile Y ekseni hassasiyetini artırmak için yardımcılar
+	const generateTicks = (minValue: number, maxValue: number, scale: number) => {
+		if (!isFinite(minValue) || !isFinite(maxValue)) return undefined as undefined | number[];
+		const range = maxValue - minValue || Math.abs(maxValue) || 1;
+		const baseCount = 6;
+		const count = Math.min(20, Math.max(4, Math.round(baseCount * scale)));
+		const step = range / count;
+		const decimals = step < 1 ? 2 : step < 5 ? 1 : 0;
+		const nice = (n: number) => Number(n.toFixed(decimals));
+		const start = Math.floor(minValue / step) * step;
+		const end = Math.ceil(maxValue / step) * step;
+		const ticks: number[] = [];
+		for (let v = start; v <= end + step / 2; v += step) ticks.push(nice(v));
+		return ticks;
+	};
+
+	const yRange = useMemo(() => {
+		let min = Number.POSITIVE_INFINITY;
+		let max = Number.NEGATIVE_INFINITY;
+		if (type === 'bar' || type === 'line') {
+			(safeData as any[]).forEach((d: any) => {
+				const val = Number(d?.value ?? 0);
+				if (!Number.isNaN(val)) { min = Math.min(min, val); max = Math.max(max, val); }
+			});
+		} else if (type === 'multi-line' || type === 'grouped-bar') {
+			const keys = seriesKeys && seriesKeys.length > 0 ? seriesKeys : Object.keys((safeData[0] as any) || {}).filter(k => k !== 'label');
+			(safeData as any[]).forEach((row: any) => {
+				keys.forEach((k: string) => {
+					const val = Number(row[k]);
+					if (!Number.isNaN(val)) { min = Math.min(min, val); max = Math.max(max, val); }
+				});
+			});
+		}
+		if (!isFinite(min) || !isFinite(max)) return undefined as undefined | [number, number];
+		return [min, max] as [number, number];
+	}, [safeData, type, seriesKeys]);
+
+	const yTicks = useMemo(() => {
+		if (!yRange) return undefined as undefined | number[];
+		const [min, max] = yRange;
+		return generateTicks(min, max, zoomScale);
+	}, [yRange, zoomScale]);
 
 	const CustomLegend = (props: any) => {
 		const { payload } = props || {};
@@ -457,7 +500,7 @@ export default function ChartCard({
 				<h3 className="text-lg font-semibold mb-4 text-gray-800">{title}</h3>
 			)}
 			<div 
-				className="overflow-hidden group relative" 
+				className="overflow-visible group relative" 
 				onWheel={handleWheel}
 				onMouseDown={handleMouseDown}
 				onMouseMove={handleMouseMove}
@@ -491,7 +534,7 @@ export default function ChartCard({
 							<div style={{ flex: 1, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
 								<ResponsiveContainer width="100%" height="100%">
 									<PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-										<Tooltip content={<CustomTooltip />} />
+										<Tooltip content={<CustomTooltip />} wrapperStyle={{ zIndex: 10000 }} />
 										<Pie 
 											data={displayedData} 
 											dataKey="value" 
@@ -534,12 +577,8 @@ export default function ChartCard({
 										axisLine={{ stroke: axisColor }}
 										tickMargin={10}
 									/>
-									<YAxis 
-										tick={{ fill: axisColor, fontSize: 12, fontWeight: 600 }} 
-										axisLine={{ stroke: axisColor }}
-										tickMargin={10}
-									/>
-									<Tooltip content={<CustomTooltip />} cursor={false} />
+									<YAxis tick={{ fill: axisColor, fontSize: 12, fontWeight: 600 }} axisLine={{ stroke: axisColor }} tickMargin={10} allowDecimals {...(yTicks ? { ticks: yTicks, domain: [yTicks[0], yTicks[yTicks.length - 1]] } : {})} />
+									<Tooltip content={<CustomTooltip />} cursor={false} wrapperStyle={{ zIndex: 10000 }} />
 									<Bar dataKey="value" fill="#3B82F6" radius={[4, 4, 0, 0]} />
 								</BarChart>
 							) : type === 'line' ? (
@@ -556,12 +595,8 @@ export default function ChartCard({
 										axisLine={{ stroke: axisColor }}
 										tickMargin={10}
 									/>
-									<YAxis 
-										tick={{ fill: axisColor, fontSize: 12, fontWeight: 600 }} 
-										axisLine={{ stroke: axisColor }}
-										tickMargin={10}
-									/>
-									<Tooltip content={<CustomTooltip />} cursor={false} />
+									<YAxis tick={{ fill: axisColor, fontSize: 12, fontWeight: 600 }} axisLine={{ stroke: axisColor }} tickMargin={10} allowDecimals {...(yTicks ? { ticks: yTicks, domain: [yTicks[0], yTicks[yTicks.length - 1]] } : {})} />
+									<Tooltip content={<CustomTooltip />} cursor={false} wrapperStyle={{ zIndex: 10000 }} />
 									<Line type="monotone" dataKey="value" stroke="#3B82F6" strokeWidth={3} dot={{ r: 4, fill: '#3B82F6' }} />
 								</LineChart>
 							) : (
@@ -578,12 +613,8 @@ export default function ChartCard({
 										axisLine={{ stroke: axisColor }}
 										tickMargin={10}
 									/>
-									<YAxis 
-										tick={{ fill: axisColor, fontSize: 12, fontWeight: 600 }} 
-										axisLine={{ stroke: axisColor }}
-										tickMargin={10}
-									/>
-									<Tooltip content={<CustomTooltip />} cursor={false} />
+									<YAxis tick={{ fill: axisColor, fontSize: 12, fontWeight: 600 }} axisLine={{ stroke: axisColor }} tickMargin={10} allowDecimals {...(yTicks ? { ticks: yTicks, domain: [yTicks[0], yTicks[yTicks.length - 1]] } : {})} />
+									<Tooltip content={<CustomTooltip />} cursor={false} wrapperStyle={{ zIndex: 10000 }} />
 									<Legend content={<CustomLegend />} />
 									{seriesKeys?.map((key, index) => (
 										<Line 

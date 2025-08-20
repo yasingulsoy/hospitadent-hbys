@@ -4,6 +4,16 @@ const pool = require('../config/database');
 
 const router = express.Router();
 
+// Yardımcı: Tablo var mı kontrol et
+async function tableExists(tableName) {
+  try {
+    const result = await pool.query('SELECT to_regclass($1) as reg', [`public.${tableName}`]);
+    return Boolean(result.rows[0] && result.rows[0].reg);
+  } catch (e) {
+    return false;
+  }
+}
+
 // Tüm şubeleri getir
 router.get('/', async (req, res) => {
   try {
@@ -30,14 +40,9 @@ router.get('/', async (req, res) => {
     const countResult = await pool.query(countQuery, params);
     const total = parseInt(countResult.rows[0].count);
 
-    // Şubeleri getir (manager bilgileri ile birlikte)
+    // Şubeleri getir (tüm bilgiler branches tablosundan)
     const query = `
-      SELECT 
-        b.*,
-        u.username as manager_name,
-        u.email as manager_email
-      FROM branches b
-      LEFT JOIN users u ON b.manager_id = u.id
+      SELECT * FROM branches b
       ${whereClause}
       ORDER BY b.created_at DESC 
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
@@ -72,12 +77,7 @@ router.get('/:id', async (req, res) => {
     const { id } = req.params;
 
     const result = await pool.query(`
-      SELECT 
-        b.*,
-        u.username as manager_name,
-        u.email as manager_email
-      FROM branches b
-      LEFT JOIN users u ON b.manager_id = u.id
+      SELECT * FROM branches b
       WHERE b.id = $1
     `, [id]);
 
@@ -106,6 +106,7 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const {
+      branch_id,
       name,
       code,
       province,
@@ -113,7 +114,9 @@ router.post('/', async (req, res) => {
       phone,
       email,
       manager_id,
-      timezone = 'Europe/Istanbul'
+      manager_name,
+      timezone = 'Europe/Istanbul',
+      is_active = true
     } = req.body;
 
     // Kod kontrolü
@@ -129,12 +132,39 @@ router.post('/', async (req, res) => {
     // Manager ID'yi kontrol et - boşsa NULL yap
     const finalManagerId = manager_id && manager_id !== '' && manager_id !== null ? parseInt(manager_id) : null;
     
-    // Yeni şube oluştur
+    // Eğer branch_id verildiyse benzersiz ve sayısal olmalı
+    if (branch_id !== undefined && branch_id !== null && branch_id !== '') {
+      const numericId = parseInt(branch_id);
+      if (Number.isNaN(numericId) || numericId <= 0) {
+        return res.status(400).json({ success: false, message: 'Geçerli bir branch_id girin' });
+      }
+      const idExists = await pool.query('SELECT 1 FROM branches WHERE id = $1', [numericId]);
+      if (idExists.rows.length > 0) {
+        return res.status(400).json({ success: false, message: 'Bu branch_id zaten kullanılıyor' });
+      }
+      // Belirtilen ID ile ekle
+      const result = await pool.query(`
+        INSERT INTO branches (id, name, code, province, address, phone, email, manager_id, manager_name, timezone, is_active)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        RETURNING *
+      `, [numericId, name, code, province, address, phone, email, finalManagerId, manager_name, timezone, is_active]);
+
+      // Sequence'i en yüksek ID'ye ayarla
+      await pool.query("SELECT setval(pg_get_serial_sequence('branches','id'), GREATEST((SELECT MAX(id) FROM branches), 1))");
+
+      return res.status(201).json({
+        success: true,
+        message: 'Şube başarıyla oluşturuldu',
+        data: result.rows[0]
+      });
+    }
+
+    // branch_id verilmediyse otomatik ID ile ekle
     const result = await pool.query(`
-      INSERT INTO branches (name, code, province, address, phone, email, manager_id, timezone)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      INSERT INTO branches (name, code, province, address, phone, email, manager_id, manager_name, timezone, is_active)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *
-    `, [name, code, province, address, phone, email, finalManagerId, timezone]);
+    `, [name, code, province, address, phone, email, finalManagerId, manager_name, timezone, is_active]);
 
     res.status(201).json({
       success: true,
@@ -163,6 +193,7 @@ router.put('/:id', async (req, res) => {
       phone,
       email,
       manager_id,
+      manager_name,
       timezone,
       is_active
     } = req.body;
@@ -203,23 +234,19 @@ router.put('/:id', async (req, res) => {
           phone = COALESCE($5, phone),
           email = COALESCE($6, email),
           manager_id = COALESCE($7, manager_id),
-          timezone = COALESCE($8, timezone),
-          is_active = COALESCE($9, is_active),
+          manager_name = COALESCE($8, manager_name),
+          timezone = COALESCE($9, timezone),
+          is_active = COALESCE($10, is_active),
           updated_at = CURRENT_TIMESTAMP
-      WHERE id = $10
+      WHERE id = $11
       RETURNING *
-    `, [name, code, province, address, phone, email, finalManagerId, timezone, is_active, id]);
+    `, [name, code, province, address, phone, email, finalManagerId, manager_name, timezone, is_active, id]);
     
     console.log('Update sonucu:', result.rows[0]); // Debug log
 
-    // Güncellenmiş şubeyi manager bilgileri ile birlikte getir
+    // Güncellenmiş şubeyi getir
     const updatedBranch = await pool.query(`
-      SELECT 
-        b.*,
-        u.username as manager_name,
-        u.email as manager_email
-      FROM branches b
-      LEFT JOIN users u ON b.manager_id = u.id
+      SELECT * FROM branches b
       WHERE b.id = $1
     `, [id]);
 
@@ -253,8 +280,20 @@ router.delete('/:id', async (req, res) => {
       });
     }
 
-    // Şubeyi sil
-    await pool.query('DELETE FROM branches WHERE id = $1', [id]);
+    // İlişkili kayıtlarla birlikte şubeyi güvenli şekilde sil (transaksiyon)
+    try {
+      await pool.query('BEGIN');
+      // Varsa şubeye bağlı kartları sil (tablo mevcutsa)
+      if (await tableExists('branch_cards')) {
+        await pool.query('DELETE FROM branch_cards WHERE branch_id = $1', [id]);
+      }
+      // Ardından şubeyi sil
+      await pool.query('DELETE FROM branches WHERE id = $1', [id]);
+      await pool.query('COMMIT');
+    } catch (txError) {
+      await pool.query('ROLLBACK');
+      throw txError;
+    }
 
     res.json({
       success: true,

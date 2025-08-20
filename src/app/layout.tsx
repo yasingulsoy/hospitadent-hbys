@@ -6,7 +6,7 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "HospitaTech BI",
-  description: "HospitaTech Merkezi Yönetim Sistemi - Modern ve kapsamlı hastane yönetim sistemi",
+  description: "HospitaTech BI - Modern ve kapsamlı iş zekası platformu",
   keywords: "hastane, hbys, yönetim, randevu, hasta, tedavi, rapor",
 };
 

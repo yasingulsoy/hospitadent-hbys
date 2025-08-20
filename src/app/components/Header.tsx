@@ -78,10 +78,8 @@ export default function Header() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">
-                  Hospitadent Dental HBYS
+                  HospitaTech BI
                 </h1>
-                <p className="text-base text-gray-600 mt-1 font-medium">Merkezi Yönetim Sistemi</p>
-                <p className="text-sm text-gray-500 mt-1">Kurumsal Diş Sağlığı Yönetimi Platformu</p>
               </div>
             </div>
 

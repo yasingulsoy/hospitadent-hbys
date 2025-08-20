@@ -18,7 +18,8 @@ import {
   CheckCircle,
   AlertCircle,
   Save,
-  X
+  X,
+  Copy
 } from 'lucide-react';
 
 interface Branch {
@@ -53,6 +54,7 @@ export default function BranchesPage() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [copiedBranchId, setCopiedBranchId] = useState(false);
 
   // Şubeleri yükle
   useEffect(() => {
@@ -97,18 +99,18 @@ export default function BranchesPage() {
     if (!editingBranch) return;
 
     try {
-      console.log('Gönderilecek veri:', editingBranch); // Debug için
-      console.log('Manager ID:', editingBranch.manager_id); // Debug için
-      console.log('Manager Name:', editingBranch.manager_name); // Debug için
+      console.log('Gönderilecek veri:', editingBranch);
+      console.log('Manager ID:', editingBranch.manager_id);
+      console.log('Manager Name:', editingBranch.manager_name);
       
       const response = await apiPut(`http://localhost:5000/api/branches/${editingBranch.id}`, editingBranch);
 
       const data = await response.json();
-      console.log('Backend yanıtı:', data); // Debug için
-      console.log('Güncellenmiş şube:', data.data); // Debug için
+      console.log('Backend yanıtı:', data);
+      console.log('Güncellenmiş şube:', data.data);
       
       if (data.success) {
-        await loadBranches(); // Şubeleri yeniden yükle
+        await loadBranches();
         setShowEditModal(false);
         setEditingBranch(null);
         alert('Şube başarıyla güncellendi!');
@@ -128,7 +130,7 @@ export default function BranchesPage() {
       const response = await apiDelete(`http://localhost:5000/api/branches/${id}`);
 
       if (response.ok) {
-        await loadBranches(); // Şubeleri yeniden yükle
+        await loadBranches();
         alert('Şube başarıyla silindi!');
       } else {
         alert('Şube silinirken hata oluştu');
@@ -317,142 +319,271 @@ export default function BranchesPage() {
 
       {/* Düzenleme Modal */}
       {showEditModal && editingBranch && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-semibold text-gray-900">Şube Düzenle</h3>
-              <button
-                onClick={() => setShowEditModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="h-6 w-6" />
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Şube Adı</label>
-                  <input
-                    type="text"
-                    value={editingBranch.name}
-                    onChange={(e) => setEditingBranch({...editingBranch, name: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+        <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[95vh] overflow-y-auto">
+            {/* Header */}
+            <div className="sticky top-0 bg-white rounded-t-3xl p-8 pb-6 border-b border-gray-200 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-4 rounded-2xl shadow-lg">
+                    <Building2 className="h-8 w-8 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-3xl font-bold text-gray-900">Şube Düzenle</h3>
+                    <p className="text-gray-600 text-base mt-1">Şube bilgilerini güncelleyin ve kaydedin</p>
+                  </div>
                 </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Şube Kodu</label>
-                  <input
-                    type="text"
-                    value={editingBranch.code}
-                    onChange={(e) => setEditingBranch({...editingBranch, code: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">İl</label>
-                  <input
-                    type="text"
-                    value={editingBranch.province}
-                    onChange={(e) => setEditingBranch({...editingBranch, province: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Telefon</label>
-                  <input
-                    type="text"
-                    value={editingBranch.phone}
-                    onChange={(e) => setEditingBranch({...editingBranch, phone: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">E-posta</label>
-                  <input
-                    type="text"
-                    value={editingBranch.email}
-                    onChange={(e) => setEditingBranch({...editingBranch, email: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Müdür</label>
-                  <select
-                    value={editingBranch.manager_id || ''}
-                    onChange={(e) => {
-                      const managerId = e.target.value ? parseInt(e.target.value) : null;
-                      const manager = users.find(u => u.id === managerId);
-                      console.log('Seçilen müdür ID:', managerId); // Debug için
-                      console.log('Bulunan müdür:', manager); // Debug için
-                      setEditingBranch({
-                        ...editingBranch, 
-                        manager_id: managerId,
-                        manager_name: manager?.username || null,
-                        manager_email: manager?.email || null
-                      });
-                      console.log('Güncellenmiş şube:', {
-                        ...editingBranch, 
-                        manager_id: managerId,
-                        manager_name: manager?.username || null,
-                        manager_email: manager?.email || null
-                      }); // Debug için
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">Müdür Seçin</option>
-                    {users.map(user => (
-                      <option key={user.id} value={user.id}>
-                        {user.username} ({user.email})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Adres</label>
-                <textarea
-                  value={editingBranch.address}
-                  onChange={(e) => setEditingBranch({...editingBranch, address: e.target.value})}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="is_active"
-                  checked={editingBranch.is_active}
-                  onChange={(e) => setEditingBranch({...editingBranch, is_active: e.target.checked})}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label htmlFor="is_active" className="ml-2 block text-sm text-gray-900">
-                  Aktif
-                </label>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="text-gray-400 hover:text-gray-600 p-3 hover:bg-gray-100 rounded-full transition-all duration-200 hover:scale-110"
+                >
+                  <X className="h-7 w-7" />
+                </button>
               </div>
             </div>
             
-            <div className="flex space-x-3 mt-6">
-              <button
-                onClick={() => setShowEditModal(false)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-semibold transition-colors"
-              >
-                İptal
-              </button>
-              <button
-                onClick={handleSave}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors"
-              >
-                <Save className="h-4 w-4 inline mr-2" />
-                Kaydet
-              </button>
+            <div className="p-8 space-y-8">
+              {/* Şube ID - Özel Alan */}
+              <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-6 rounded-2xl border border-blue-200">
+                <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                  <div className="bg-blue-600 p-2 rounded-lg mr-3">
+                    <Building2 className="h-5 w-5 text-white" />
+                  </div>
+                  Şube Kimlik Bilgisi
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                      <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded-full mr-2">branch_id</span>
+                      Şube ID
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={editingBranch.id}
+                        disabled
+                        className="w-full px-4 py-4 bg-blue-50 border-2 border-blue-200 rounded-xl text-blue-800 font-mono font-bold text-lg cursor-not-allowed shadow-inner"
+                      />
+                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center space-x-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(String(editingBranch.id));
+                            setCopiedBranchId(true);
+                            setTimeout(() => setCopiedBranchId(false), 1500);
+                          }}
+                          className="p-1.5 rounded-lg bg-white/70 hover:bg-white border border-blue-200 text-blue-700 transition-colors"
+                          title="branch_id kopyala"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </button>
+                        <span className="bg-blue-600 text-white text-xs px-2 py-1 rounded-full font-medium">Otomatik</span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-blue-600 mt-2">Bu alan otomatik olarak sistem tarafından atanır ve değiştirilemez. Gerekli formlarda kolon adı <span className="font-semibold">branch_id</span> olarak kullanılır.</p>
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                      <span className="bg-green-100 text-green-800 text-xs font-bold px-2 py-1 rounded-full mr-2">Kod</span>
+                      Şube Kodu
+                    </label>
+                    <input
+                      type="text"
+                      value={editingBranch.code}
+                      onChange={(e) => setEditingBranch({...editingBranch, code: e.target.value})}
+                      className="w-full px-4 py-4 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white shadow-sm hover:shadow-md"
+                      placeholder="Örn: IST-BKRK-001"
+                    />
+                    <p className="text-xs text-gray-500 mt-2">Benzersiz şube kodu (örn: İl-İlçe-Sıra)</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Temel Bilgiler */}
+              <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200">
+                <h4 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
+                  <div className="bg-blue-600 p-2 rounded-lg mr-3">
+                    <Building2 className="h-5 w-5 text-white" />
+                  </div>
+                  Temel Bilgiler
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                      <span className="bg-red-100 text-red-800 text-xs font-bold px-2 py-1 rounded-full mr-2">*</span>
+                      Şube Adı
+                    </label>
+                    <input
+                      type="text"
+                      value={editingBranch.name}
+                      onChange={(e) => setEditingBranch({...editingBranch, name: e.target.value})}
+                      className="w-full px-4 py-4 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white shadow-sm hover:shadow-md"
+                      placeholder="Şube adını girin"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                      <span className="bg-red-100 text-red-800 text-xs font-bold px-2 py-1 rounded-full mr-2">*</span>
+                      İl
+                    </label>
+                    <input
+                      type="text"
+                      value={editingBranch.province}
+                      onChange={(e) => setEditingBranch({...editingBranch, province: e.target.value})}
+                      className="w-full px-4 py-4 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white shadow-sm hover:shadow-md"
+                      placeholder="İl adını girin"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* İletişim Bilgileri */}
+              <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200">
+                <h4 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
+                  <div className="bg-green-600 p-2 rounded-lg mr-3">
+                    <Phone className="h-5 w-5 text-white" />
+                  </div>
+                  İletişim Bilgileri
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                      <span className="bg-red-100 text-red-800 text-xs font-bold px-2 py-1 rounded-full mr-2">*</span>
+                      Telefon
+                    </label>
+                    <input
+                      type="text"
+                      value={editingBranch.phone}
+                      onChange={(e) => setEditingBranch({...editingBranch, phone: e.target.value})}
+                      className="w-full px-4 py-4 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white shadow-sm hover:shadow-md"
+                      placeholder="+90 212 555 0000"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                      <span className="bg-red-100 text-red-800 text-xs font-bold px-2 py-1 rounded-full mr-2">*</span>
+                      E-posta
+                    </label>
+                    <input
+                      type="text"
+                      value={editingBranch.email}
+                      onChange={(e) => setEditingBranch({...editingBranch, email: e.target.value})}
+                      className="w-full px-4 py-4 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white shadow-sm hover:shadow-md"
+                      placeholder="ornek@hospitatech.com"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Müdür Bilgileri */}
+              <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200">
+                <h4 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
+                  <div className="bg-purple-600 p-2 rounded-lg mr-3">
+                    <Users className="h-5 w-5 text-white" />
+                  </div>
+                  Müdür Bilgileri
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                      <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded-full mr-2">Ad</span>
+                      Müdür Adı
+                    </label>
+                    <input
+                      type="text"
+                      value={editingBranch.manager_name || ''}
+                      onChange={(e) => setEditingBranch({...editingBranch, manager_name: e.target.value})}
+                      className="w-full px-4 py-4 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white shadow-sm hover:shadow-md"
+                      placeholder="Müdür adını girin"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                      <span className="bg-orange-100 text-orange-800 text-xs font-bold px-2 py-1 rounded-full mr-2">ID</span>
+                      Müdür ID (Opsiyonel)
+                    </label>
+                    <select
+                      value={editingBranch.manager_id || ''}
+                      onChange={(e) => {
+                        const managerId = e.target.value ? parseInt(e.target.value) : null;
+                        setEditingBranch({
+                          ...editingBranch, 
+                          manager_id: managerId
+                        });
+                      }}
+                      className="w-full px-4 py-4 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white shadow-sm hover:shadow-md"
+                    >
+                      <option value="">Müdür Seçin (Opsiyonel)</option>
+                      {users.map(user => (
+                        <option key={user.id} value={user.id}>
+                          {user.username} ({user.email})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Adres ve Durum */}
+              <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200">
+                <h4 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
+                  <div className="bg-orange-600 p-2 rounded-lg mr-3">
+                    <MapPin className="h-5 w-5 text-white" />
+                  </div>
+                  Konum ve Durum
+                </h4>
+                <div className="space-y-6">
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                      <span className="bg-red-100 text-red-800 text-xs font-bold px-2 py-1 rounded-full mr-2">*</span>
+                      Adres
+                    </label>
+                    <textarea
+                      value={editingBranch.address}
+                      onChange={(e) => setEditingBranch({...editingBranch, address: e.target.value})}
+                      rows={3}
+                      className="w-full px-4 py-4 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white shadow-sm hover:shadow-md"
+                      placeholder="Detaylı adres bilgisi girin"
+                    />
+                  </div>
+                  
+                  <div className="flex items-center p-4 bg-white rounded-xl border border-gray-200">
+                    <input
+                      type="checkbox"
+                      id="is_active"
+                      checked={editingBranch.is_active}
+                      onChange={(e) => setEditingBranch({...editingBranch, is_active: e.target.checked})}
+                      className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="is_active" className="ml-3 block text-sm font-semibold text-gray-900">
+                      Şube Aktif
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Buttons */}
+            <div className="sticky bottom-0 bg-white rounded-b-3xl p-8 pt-6 border-t border-gray-200 shadow-sm">
+              <div className="flex space-x-4">
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-4 rounded-xl font-semibold transition-all duration-200 hover:shadow-md text-lg"
+                >
+                  İptal
+                </button>
+                <button
+                  onClick={handleSave}
+                  className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-4 rounded-xl font-semibold transition-all duration-200 hover:shadow-lg transform hover:scale-105 flex items-center justify-center space-x-2 text-lg"
+                >
+                  <Save className="h-6 w-6" />
+                  <span>Güncelle</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

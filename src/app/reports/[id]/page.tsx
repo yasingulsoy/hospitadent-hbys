@@ -2074,13 +2074,13 @@ export default function ReportDetailPage() {
 
             {/* Filtre Ekle Modalı */}
             {showAddFilterModal && (
-              <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-                <div className="bg-white rounded-xl shadow-xl p-5 w-full max-w-lg">
+              <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999]">
+                <div className="bg-white rounded-xl shadow-2xl p-5 w-full max-w-lg border border-gray-100">
                   <div className="flex items-center justify-between mb-4">
-                    <div className="text-lg font-semibold">Filtre Ekle</div>
-                    <button onClick={() => setShowAddFilterModal(false)} className="text-gray-500 hover:text-gray-700">Kapat</button>
+                    <div className="text-lg font-semibold text-gray-900">Filtre Ekle</div>
+                    <button onClick={() => setShowAddFilterModal(false)} className="text-gray-600 hover:text-gray-800 font-medium">Kapat</button>
                   </div>
-                  <div className="max-h-80 overflow-y-auto divide-y">
+                  <div className="max-h-80 overflow-y-auto divide-y text-gray-800">
                     {dbFilters
                       .filter(f => !assignedFilters.some((af: any) => af.filter_id === f.id))
                       .map((f: any) => (

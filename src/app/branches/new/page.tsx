@@ -36,6 +36,7 @@ export default function NewBranchPage() {
     phone: '',
     email: '',
     manager_id: '',
+    manager_name: '',
     timezone: 'Europe/Istanbul',
     is_active: true
   });
@@ -93,9 +94,7 @@ export default function NewBranchPage() {
       newErrors.email = 'Geçerli bir e-posta adresi giriniz';
     }
 
-    if (!formData.manager_id) {
-      newErrors.manager_id = 'Şube müdürü seçimi zorunludur';
-    }
+    // manager_id zorunlu değil, boş bırakılabilir
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -175,9 +174,14 @@ export default function NewBranchPage() {
 
         {/* Form */}
         <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Şube Bilgileri */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <form onSubmit={handleSubmit} className="space-y-8">
+            {/* Temel Bilgiler */}
+            <div className="bg-gray-50 p-6 rounded-2xl">
+              <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <Building2 className="h-5 w-5 mr-2 text-blue-600" />
+                Temel Bilgiler
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Şube Adı <span className="text-red-500">*</span>
@@ -240,6 +244,7 @@ export default function NewBranchPage() {
                   </p>
                 )}
               </div>
+            </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -285,65 +290,77 @@ export default function NewBranchPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Müdür <span className="text-red-500">*</span>
+                  Müdür Adı
+                </label>
+                <input
+                  type="text"
+                  value={formData.manager_name}
+                  onChange={(e) => setFormData({...formData, manager_name: e.target.value})}
+                  className="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent border-gray-300"
+                  placeholder="Müdür adını girin"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Müdür ID (Opsiyonel)
                 </label>
                 <select
                   value={formData.manager_id}
                   onChange={(e) => setFormData({...formData, manager_id: e.target.value})}
-                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.manager_id ? 'border-red-300' : 'border-gray-300'
-                  }`}
+                  className="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent border-gray-300"
                 >
-                  <option value="">Müdür Seçin</option>
+                  <option value="">Müdür Seçin (Opsiyonel)</option>
                   {users.map(user => (
                     <option key={user.id} value={user.id}>
                       {user.username} ({user.email})
                     </option>
                   ))}
                 </select>
-                {errors.manager_id && (
-                  <p className="mt-1 text-sm text-red-600 flex items-center">
-                    <AlertCircle className="h-4 w-4 mr-1" />
-                    {errors.manager_id}
-                  </p>
-                )}
               </div>
             </div>
 
-            {/* Adres */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Adres <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                value={formData.address}
-                onChange={(e) => setFormData({...formData, address: e.target.value})}
-                rows={3}
-                className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  errors.address ? 'border-red-300' : 'border-gray-300'
-                }`}
-                placeholder="Kadıköy, İstanbul"
-              />
-              {errors.address && (
-                <p className="mt-1 text-sm text-red-600 flex items-center">
-                  <AlertCircle className="h-4 w-4 mr-1" />
-                  {errors.address}
-                </p>
-              )}
-            </div>
-
-            {/* Durum */}
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="is_active"
-                checked={formData.is_active}
-                onChange={(e) => setFormData({...formData, is_active: e.target.checked})}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label htmlFor="is_active" className="ml-2 block text-sm text-gray-900">
-                Aktif
-              </label>
+            {/* Adres ve Durum */}
+            <div className="bg-gray-50 p-6 rounded-2xl">
+              <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <MapPin className="h-5 w-5 mr-2 text-orange-600" />
+                Konum ve Durum
+              </h4>
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Adres <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={formData.address}
+                    onChange={(e) => setFormData({...formData, address: e.target.value})}
+                    rows={3}
+                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      errors.address ? 'border-red-300' : 'border-gray-300'
+                    }`}
+                    placeholder="Kadıköy, İstanbul"
+                  />
+                  {errors.address && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center">
+                      <AlertCircle className="h-4 w-4 mr-1" />
+                      {errors.address}
+                    </p>
+                  )}
+                </div>
+                
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="is_active"
+                    checked={formData.is_active}
+                    onChange={(e) => setFormData({...formData, is_active: e.target.checked})}
+                    className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="is_active" className="ml-3 block text-sm text-gray-900">
+                    Şube Aktif
+                  </label>
+                </div>
+              </div>
             </div>
 
             {/* Buttons */}
