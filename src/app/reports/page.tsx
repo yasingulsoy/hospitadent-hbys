@@ -67,7 +67,7 @@ export default function ReportsPage() {
   const [selectedXAxis, setSelectedXAxis] = useState<AxisOption | null>(null);
   const [selectedYAxis, setSelectedYAxis] = useState<AxisOption | null>(null);
   const [sorting, setSorting] = useState<'asc' | 'desc'>('desc');
-  const [aggregationMethod, setAggregationMethod] = useState<'sum' | 'count' | 'avg' | 'count_nonzero'>('sum');
+  const [aggregationMethod, setAggregationMethod] = useState<'sum' | 'count' | 'avg' | 'count_nonzero' | 'distinct'>('sum');
   const [chartData, setChartData] = useState<any[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
   const [branchFilter, setBranchFilter] = useState<string>('');
@@ -444,13 +444,14 @@ export default function ReportsPage() {
                 </label>
                 <select
                   value={aggregationMethod}
-                  onChange={(e) => setAggregationMethod(e.target.value as 'sum' | 'count' | 'avg' | 'count_nonzero')}
+                  onChange={(e) => setAggregationMethod(e.target.value as 'sum' | 'count' | 'avg' | 'count_nonzero' | 'distinct')}
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
                 >
                   <option value="sum">Toplam</option>
                   <option value="count">Sayı</option>
                   <option value="avg">Ortalama</option>
                   <option value="count_nonzero">0'dan Farklı Say</option>
+                  <option value="distinct">Benzersiz Sayı (Distinct)</option>
                 </select>
 
                 <button

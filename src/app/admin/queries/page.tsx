@@ -47,6 +47,8 @@ export default function QueriesPage() {
     is_public: false,
     sql_query: ''
   });
+  const [selectedQueries, setSelectedQueries] = useState<number[]>([]);
+  const [showBulkActions, setShowBulkActions] = useState(false);
 
   useEffect(() => {
     loadSavedQueries();
@@ -143,6 +145,50 @@ export default function QueriesPage() {
     window.open(`/reports/${id}`, '_blank');
   };
 
+  const handleBulkMakePublic = async () => {
+    if (selectedQueries.length === 0) return;
+    
+    if (!confirm(`${selectedQueries.length} sorguyu genel erişime açmak istediğinizden emin misiniz?`)) return;
+    
+    try {
+      const response = await fetch('http://localhost:5000/api/admin/database/make-public', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ queryIds: selectedQueries }),
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        alert(data.message);
+        setSelectedQueries([]);
+        loadSavedQueries();
+      } else {
+        alert('Toplu güncelleme hatası!');
+      }
+    } catch (error) {
+      alert('Toplu güncelleme hatası!');
+    }
+  };
+
+  const toggleQuerySelection = (queryId: number) => {
+    setSelectedQueries(prev => 
+      prev.includes(queryId) 
+        ? prev.filter(id => id !== queryId)
+        : [...prev, queryId]
+    );
+  };
+
+  const selectAllQueries = () => {
+    setSelectedQueries(filteredQueries.map(q => q.id));
+  };
+
+  const clearSelection = () => {
+    setSelectedQueries([]);
+  };
+
   const filteredQueries = savedQueries.filter(query => {
     const matchesSearch = query.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          query.description.toLowerCase().includes(searchTerm.toLowerCase());
@@ -204,6 +250,83 @@ export default function QueriesPage() {
           </div>
         </div>
 
+        {/* Debug Bilgisi */}
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <span className="text-sm font-medium text-gray-700">
+                Toplam: {savedQueries.length} | 
+                <span className="text-green-600 ml-2">Public: {savedQueries.filter(q => q.is_public).length}</span> | 
+                <span className="text-orange-600 ml-2">Private: {savedQueries.filter(q => !q.is_public).length}</span>
+              </span>
+            </div>
+            <div className="flex space-x-3">
+              <button
+                onClick={async () => {
+                  try {
+                    const response = await fetch('http://localhost:5000/api/reports/debug/all-queries', {
+                      credentials: 'include'
+                    });
+                    if (response.ok) {
+                      const data = await response.json();
+                      console.log('🔍 Debug Sorgu Bilgisi:', data);
+                      alert(`Debug bilgisi console'da görüntülendi.\nToplam: ${data.summary.total}, Public: ${data.summary.public}, Private: ${data.summary.private}`);
+                    }
+                  } catch (error) {
+                    console.error('Debug hatası:', error);
+                  }
+                }}
+                className="text-sm text-gray-600 hover:text-gray-800 underline"
+              >
+                🔍 Debug Bilgisi
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Toplu İşlemler */}
+        {selectedQueries.length > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <span className="text-sm font-medium text-blue-800">
+                  {selectedQueries.length} sorgu seçildi
+                </span>
+                <button
+                  onClick={clearSelection}
+                  className="text-sm text-blue-600 hover:text-blue-800 underline"
+                >
+                  Seçimi temizle
+                </button>
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleBulkMakePublic}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                >
+                  🌐 Seçilenleri Public Yap
+                </button>
+                <button
+                  onClick={async () => {
+                    const privateQueries = filteredQueries.filter(q => !q.is_public).map(q => q.id);
+                    if (privateQueries.length === 0) {
+                      alert('Public yapılacak private sorgu yok!');
+                      return;
+                    }
+                    if (confirm(`${privateQueries.length} private sorguyu public yapmak istediğinizden emin misiniz?`)) {
+                      setSelectedQueries(privateQueries);
+                      await handleBulkMakePublic();
+                    }
+                  }}
+                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                >
+                  🚀 Tüm Private'ları Public Yap
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Filtreler */}
         <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-100">
           <div className="flex flex-col md:flex-row gap-4">
@@ -233,6 +356,13 @@ export default function QueriesPage() {
                   </option>
                 ))}
               </select>
+              
+              <button
+                onClick={selectAllQueries}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-medium transition-colors"
+              >
+                Tümünü Seç
+              </button>
             </div>
           </div>
         </div>
@@ -257,6 +387,12 @@ export default function QueriesPage() {
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center space-x-3 mb-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedQueries.includes(query.id)}
+                          onChange={() => toggleQuerySelection(query.id)}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        />
                         <h3 className="text-lg font-semibold text-gray-900">{query.name}</h3>
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(query.category)}`}>
                           {query.category}
@@ -405,17 +541,24 @@ export default function QueriesPage() {
                 />
               </div>
               
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="is_public"
-                  checked={editForm.is_public}
-                  onChange={(e) => setEditForm({...editForm, is_public: e.target.checked})}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label htmlFor="is_public" className="ml-2 block text-sm text-gray-900">
-                  Genel erişime açık
-                </label>
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <div className="flex items-start space-x-3">
+                  <input
+                    type="checkbox"
+                    id="is_public"
+                    checked={editForm.is_public}
+                    onChange={(e) => setEditForm({...editForm, is_public: e.target.checked})}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-blue-300 rounded mt-1"
+                  />
+                  <div className="flex-1">
+                    <label htmlFor="is_public" className="block text-sm font-semibold text-blue-800 mb-1">
+                      🌐 Genel erişime aç
+                    </label>
+                    <p className="text-xs text-blue-700">
+                      Bu seçenek işaretlendiğinde, sorgu ana sayfadaki "Hızlı Raporlar" kısmında görünür.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
             

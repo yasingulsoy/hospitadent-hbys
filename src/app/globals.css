@@ -99,6 +99,53 @@ input:disabled, textarea:disabled, select:disabled {
   padding: 1rem;
 }
 
+/* SVG text elementleri için görünürlük ayarları */
+.chart-container svg text {
+  font-family: Arial, Helvetica, sans-serif !important;
+  text-rendering: optimizeLegibility !important;
+  font-feature-settings: "liga" 1, "kern" 1 !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+}
+
+/* Recharts SVG text elementleri için özel stiller */
+.recharts-text {
+  font-family: Arial, Helvetica, sans-serif !important;
+  text-rendering: optimizeLegibility !important;
+  font-feature-settings: "liga" 1, "kern" 1 !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+}
+
+/* X ekseni etiketleri için özel stil */
+.recharts-xAxis .recharts-cartesian-axis-tick text {
+  font-family: Arial, Helvetica, sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  fill: #1F2937 !important;
+  text-rendering: optimizeLegibility !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+}
+
+/* SVG text elementleri için genel görünürlük ayarları */
+svg text {
+  font-family: Arial, Helvetica, sans-serif !important;
+  text-rendering: optimizeLegibility !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  font-feature-settings: "liga" 1, "kern" 1 !important;
+}
+
+/* Recharts bileşenleri için ek görünürlük ayarları */
+.recharts-wrapper svg text {
+  font-family: Arial, Helvetica, sans-serif !important;
+  text-rendering: optimizeLegibility !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  font-feature-settings: "liga" 1, "kern" 1 !important;
+}
+
 /* Bar grafik için özel stiller */
 .chart-container .flex.items-end {
   min-width: max-content;

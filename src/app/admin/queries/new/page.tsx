@@ -80,7 +80,7 @@ export default function NewQueryPage() {
     description: '',
     category: 'general',
     sql_query: '',
-    is_public: false,
+    is_public: true, // Varsayılan olarak true yapıldı
     tags: []
   });
   
@@ -355,17 +355,27 @@ export default function NewQueryPage() {
                 </div>
 
                 {/* Genel Erişim */}
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="is_public"
-                    checked={form.is_public}
-                    onChange={(e) => setForm({...form, is_public: e.target.checked})}
-                    className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="is_public" className="ml-3 block text-sm text-gray-900">
-                    Bu sorguyu genel erişime aç (tüm kullanıcılar görebilsin)
-                  </label>
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
+                  <div className="flex items-start space-x-3">
+                    <input
+                      type="checkbox"
+                      id="is_public"
+                      checked={form.is_public}
+                      onChange={(e) => setForm({...form, is_public: e.target.checked})}
+                      className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-blue-300 rounded mt-1"
+                    />
+                    <div className="flex-1">
+                      <label htmlFor="is_public" className="block text-sm font-semibold text-blue-800 mb-2">
+                        🌐 Bu sorguyu genel erişime aç
+                      </label>
+                      <p className="text-sm text-blue-700 mb-2">
+                        Bu seçenek işaretlendiğinde, sorgu ana sayfadaki "Hızlı Raporlar" kısmında tüm kullanıcılara görünür.
+                      </p>
+                      <p className="text-xs text-blue-600">
+                        <strong>Önerilen:</strong> Genel kullanım için olan sorguları işaretleyin. Sadece admin kullanımı için olan sorguları işaretlemeyin.
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Kaydet Butonu */}

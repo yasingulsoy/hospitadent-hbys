@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { apiGet, apiPost } from '../../../lib/api';
+import { apiGet, apiPost, apiPut } from '../../../lib/api';
 import { 
   BarChart3, 
   ArrowLeft, 
@@ -77,9 +77,10 @@ interface AdvancedChartConfig {
   // Yeni özellikler
   xAxisType: 'categorical' | 'numeric' | 'date';
   yAxisType: 'categorical' | 'numeric' | 'date';
-  aggregation: 'sum' | 'count' | 'average' | 'min' | 'max';
+  aggregation: 'sum' | 'count' | 'count_nonzero' | 'average' | 'min' | 'max' | 'distinct';
   groupBy?: string; // Gruplama için
   sortBy?: 'asc' | 'desc'; // Sıralama
+  distinctColumn?: string; // Distinct yapılacak kolon
 }
 
 interface FilterOption {
@@ -119,6 +120,24 @@ export default function ReportDetailPage() {
   const [assignedFilters, setAssignedFilters] = useState<any[]>([]);
   const [serverFilterParams, setServerFilterParams] = useState<Record<string, any>>({});
   const [showAddFilterModal, setShowAddFilterModal] = useState(false);
+  // Grafik sıralama
+  const reorderCharts = async (newConfigs: any[]) => {
+    setAllChartConfigs(newConfigs);
+    try {
+      const order = newConfigs.map((cfg: any, idx: number) => ({ id: cfg.id, sort_order: idx + 1 }));
+      const res = await apiPut(`http://localhost:5000/api/reports/${params.id}/chart-configs/reorder`, { order });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message || 'Sıralama kaydedilemedi');
+    } catch (e: any) {
+      alert(`Sıralama kaydedilemedi: ${e.message || e}`);
+      // Geri al: sunucudan yeniden yükle
+      try {
+        const res = await apiGet(`http://localhost:5000/api/reports/${params.id}/chart-configs`);
+        const data = await res.json();
+        if (data.success && Array.isArray(data.configs)) setAllChartConfigs(data.configs);
+      } catch {}
+    }
+  };
   const [role, setRole] = useState<string | null>(null);
   const [filterSearch, setFilterSearch] = useState<Record<string, string>>({});
   // Daha kapsamlı admin kontrolü
@@ -205,7 +224,12 @@ export default function ReportDetailPage() {
         const res = await apiGet(`http://localhost:5000/api/reports/${params.id}/chart-config`);
         const data = await res.json();
         if (data.success && data.config) {
-          setInitialChartConfig(data.config);
+          const cfg = data.config || {};
+          // Backend snake_case alanı camelCase'e yansıt
+          setInitialChartConfig({
+            ...cfg,
+            distinctColumn: cfg.distinctColumn || cfg.distinct_column || ''
+          });
         }
       } catch (e) {
         // sessiz geç
@@ -222,7 +246,12 @@ export default function ReportDetailPage() {
         const res = await apiGet(`http://localhost:5000/api/reports/${params.id}/chart-configs`);
         const data = await res.json();
         if (data.success && Array.isArray(data.configs)) {
-          setAllChartConfigs(data.configs);
+          // distinct_column -> distinctColumn eşlemesi yap
+          const normalized = data.configs.map((cfg: any) => ({
+            ...cfg,
+            distinctColumn: cfg.distinctColumn || cfg.distinct_column || ''
+          }));
+          setAllChartConfigs(normalized);
         }
       } catch {}
     };
@@ -485,6 +514,8 @@ export default function ReportDetailPage() {
         advCfg.aggregation = cfg.aggregation;
         advCfg.sortBy = cfg.sort_by;
         advCfg.groupBy = cfg.group_by || cfg.x_axis;
+        // Distinct kolonunu başlangıç konfigine yansıt
+        advCfg.distinctColumn = cfg.distinctColumn || cfg.distinct_column || '';
         setAdvancedChartConfig(advCfg);
         setSelectedChartType(cfg.chart_type);
       }
@@ -546,7 +577,8 @@ export default function ReportDetailPage() {
       yAxisType,
       aggregation: 'sum' as const,
       groupBy: xAxis,
-      sortBy: 'desc' as const
+      sortBy: 'desc' as const,
+      distinctColumn: undefined
     };
   };
 
@@ -554,7 +586,7 @@ export default function ReportDetailPage() {
   const prepareChartData = () => {
     if (!advancedChartConfig || !filteredData.length) return null;
 
-    const { type, xAxis, yAxis, aggregation, groupBy, sortBy } = advancedChartConfig;
+    const { type, xAxis, yAxis, aggregation, groupBy, sortBy, distinctColumn } = advancedChartConfig;
 
     // Gruplama ve toplama
     const groupedData = new Map();
@@ -564,13 +596,15 @@ export default function ReportDetailPage() {
       const value = Number(item[yAxis]) || 0;
       
       if (!groupedData.has(groupKey)) {
-        groupedData.set(groupKey, { count: 0, sum: 0, values: [] });
+        groupedData.set(groupKey, { count: 0, sum: 0, values: [], nonZeroCount: 0, items: [] });
       }
       
       const group = groupedData.get(groupKey);
       group.count++;
       group.sum += value;
       group.values.push(value);
+      group.items.push(item);
+      if (value !== 0) group.nonZeroCount++;
     });
 
     // Sonuçları hesapla
@@ -584,6 +618,9 @@ export default function ReportDetailPage() {
         case 'count':
           aggregatedValue = data.count;
           break;
+        case 'count_nonzero':
+          aggregatedValue = data.nonZeroCount;
+          break;
         case 'average':
           aggregatedValue = data.sum / data.count;
           break;
@@ -592,6 +629,20 @@ export default function ReportDetailPage() {
           break;
         case 'max':
           aggregatedValue = Math.max(...data.values);
+          break;
+        case 'distinct':
+          if (distinctColumn) {
+            // Distinct kolon için benzersiz değerleri say
+            const distinctValues = new Set();
+            data.items.forEach((item: any) => {
+              if (item[distinctColumn] !== undefined && item[distinctColumn] !== null) {
+                distinctValues.add(String(item[distinctColumn]));
+              }
+            });
+            aggregatedValue = distinctValues.size;
+          } else {
+            aggregatedValue = 0;
+          }
           break;
       }
 
@@ -619,10 +670,10 @@ export default function ReportDetailPage() {
 
     const xAxisKey = cfg.group_by || cfg.x_axis;
     const yAxisKey = cfg.y_axis;
-    const aggregation: 'sum' | 'count' | 'average' | 'min' | 'max' = cfg.aggregation || 'sum';
+    const aggregation: 'sum' | 'count' | 'count_nonzero' | 'average' | 'min' | 'max' | 'distinct' = cfg.aggregation || 'sum';
     const sortBy: 'asc' | 'desc' = cfg.sort_by || 'desc';
 
-    const grouped = new Map<string, { count: number; sum: number; values: number[] }>();
+    const grouped = new Map<string, { count: number; sum: number; values: number[]; nonZeroCount: number; items: any[] }>();
 
     filteredData.forEach((item: any) => {
       const groupKey = item[xAxisKey];
@@ -630,14 +681,16 @@ export default function ReportDetailPage() {
       const numericValue = Number(rawValue);
 
       if (!grouped.has(groupKey)) {
-        grouped.set(String(groupKey), { count: 0, sum: 0, values: [] });
+        grouped.set(String(groupKey), { count: 0, sum: 0, values: [], nonZeroCount: 0, items: [] });
       }
 
       const g = grouped.get(String(groupKey))!;
       g.count += 1;
+      g.items.push(item);
       if (!Number.isNaN(numericValue)) {
         g.sum += numericValue;
         g.values.push(numericValue);
+        if (numericValue !== 0) g.nonZeroCount += 1;
       }
     });
 
@@ -647,6 +700,9 @@ export default function ReportDetailPage() {
         case 'count':
           value = g.count;
           break;
+        case 'count_nonzero':
+          value = g.nonZeroCount;
+          break;
         case 'average':
           value = g.count > 0 ? g.sum / g.count : 0;
           break;
@@ -655,6 +711,30 @@ export default function ReportDetailPage() {
           break;
         case 'max':
           value = g.values.length ? Math.max(...g.values) : 0;
+          break;
+        case 'distinct':
+          // Distinct için distinctColumn'daki benzersiz değerleri say
+          {
+            const distinctCol = cfg.distinctColumn || cfg.distinct_column;
+            if (distinctCol) {
+            const distinctValues = new Set();
+            g.items.forEach((item: any) => {
+              if (item[distinctCol] !== undefined && item[distinctCol] !== null) {
+                distinctValues.add(String(item[distinctCol]));
+              }
+            });
+            value = distinctValues.size;
+            } else {
+              // Eğer distinctColumn yoksa y_axis kolonundaki benzersiz değerleri say
+              const distinctValues = new Set();
+              g.items.forEach((item: any) => {
+                if (item[yAxisKey] !== undefined && item[yAxisKey] !== null) {
+                  distinctValues.add(String(item[yAxisKey]));
+                }
+              });
+              value = distinctValues.size;
+            }
+          }
           break;
         default:
           value = g.sum;
@@ -1793,8 +1873,12 @@ export default function ReportDetailPage() {
                         height: 520,
                         chart_options: {},
                         filters: filters,
-                        is_default: true
+                        is_default: true,
+                        distinctColumn: advancedChartConfig.distinctColumn || ''
                       };
+                      
+                      console.log('📤 Grafik kaydetme payload:', payload);
+                      console.log('🔍 Distinct kolon:', advancedChartConfig.distinctColumn);
                       const res = await apiPost(`http://localhost:5000/api/reports/${params.id}/chart-config`, payload);
                       const data = await res.json();
                       if (!res.ok || !data.success) throw new Error(data.message || 'Kaydedilemedi');
@@ -1804,7 +1888,13 @@ export default function ReportDetailPage() {
                       try {
                         const listRes = await apiGet(`http://localhost:5000/api/reports/${params.id}/chart-configs`);
                         const listData = await listRes.json();
-                        if (listData.success) setAllChartConfigs(listData.configs || []);
+                        if (listData.success) {
+                          const normalized = (listData.configs || []).map((cfg: any) => ({
+                            ...cfg,
+                            distinctColumn: cfg.distinctColumn || cfg.distinct_column || ''
+                          }));
+                          setAllChartConfigs(normalized);
+                        }
                       } catch {}
                     } catch (err: any) {
                       alert(`Kaydetme hatası: ${err.message}`);
@@ -2232,7 +2322,9 @@ export default function ReportDetailPage() {
                     if (advancedChartConfig) {
                       setAdvancedChartConfig({
                         ...advancedChartConfig,
-                        aggregation: e.target.value as any
+                        aggregation: e.target.value as any,
+                        // Distinct seçilirse distinctColumn'u temizle
+                        distinctColumn: e.target.value === 'distinct' ? '' : advancedChartConfig.distinctColumn
                       });
                     }
                   }}
@@ -2240,11 +2332,40 @@ export default function ReportDetailPage() {
                 >
                   <option value="sum">Toplam</option>
                   <option value="count">Sayı</option>
+                  <option value="count_nonzero">Sıfırdan Farklı Say</option>
                   <option value="average">Ortalama</option>
                   <option value="min">Minimum</option>
                   <option value="max">Maksimum</option>
+                  <option value="distinct">Benzersiz Sayı (Distinct)</option>
                 </select>
               </div>
+
+              {/* Distinct Kolon Seçimi - sadece distinct seçildiğinde göster */}
+              {advancedChartConfig?.aggregation === 'distinct' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Distinct Yapılacak Kolon</label>
+                  <select
+                    value={advancedChartConfig?.distinctColumn || ''}
+                    onChange={(e) => {
+                      if (advancedChartConfig) {
+                        setAdvancedChartConfig({
+                          ...advancedChartConfig,
+                          distinctColumn: e.target.value
+                        });
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Kolon Seçin</option>
+                    {analyzeData.categoricalColumns.map(col => (
+                      <option key={col} value={col}>{col}</option>
+                    ))}
+                    {analyzeData.numericColumns.map(col => (
+                      <option key={col} value={col}>{col}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Sıralama */}
               <div>
@@ -2342,8 +2463,12 @@ export default function ReportDetailPage() {
                            height: currentConfig.height || 520,
                            chart_options: currentConfig.chart_options || {},
                            filters: filters,
-                           is_default: currentConfig.is_default || false
+                           is_default: currentConfig.is_default || false,
+                           distinctColumn: advancedChartConfig.distinctColumn || ''
                          };
+                         
+                         console.log('📤 Grafik güncelleme payload:', payload);
+                         console.log('🔍 Distinct kolon:', advancedChartConfig.distinctColumn);
                          
                          const res = await fetch(`http://localhost:5000/api/reports/${params.id}/chart-config/${currentConfig.id}`, {
                            method: 'PUT',
@@ -2362,7 +2487,11 @@ export default function ReportDetailPage() {
                            });
                            const listData = await listRes.json();
                            if (listData.success) {
-                             setAllChartConfigs(listData.configs || []);
+                             const normalized = (listData.configs || []).map((cfg: any) => ({
+                               ...cfg,
+                               distinctColumn: cfg.distinctColumn || cfg.distinct_column || ''
+                             }));
+                             setAllChartConfigs(normalized);
                              alert('Grafik başarıyla güncellendi!');
                            }
                          } else {
@@ -2392,14 +2521,45 @@ export default function ReportDetailPage() {
             <div className="space-y-6">
               {/* Tüm kayıtlı grafikler: aktif grafik ilk sırada */}
               <div className="grid grid-cols-1 gap-6">
-                                 {[...(allChartConfigs || [])].map((cfg: any) => {
+                                 {[...(allChartConfigs || [])].map((cfg: any, index: number) => {
                    const chartData = prepareChartDataForConfig(cfg);
                    const type = mapChartType(cfg.chart_type);
                    return (
                      <div key={cfg.id} className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
                        <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
                          <span className="text-sm font-medium text-gray-700 truncate">{cfg.name}</span>
-                                                  {/* Edit and delete functionality now handled by ChartCard component */}
+                                                  {isAdminOrSuper && (
+                                                    <div className="flex items-center gap-2">
+                                                      <button
+                                                        className="px-2 py-1 text-xs border border-blue-300 text-blue-600 rounded hover:bg-blue-50 disabled:opacity-40"
+                                                        disabled={index === 0}
+                                                        onClick={() => {
+                                                          const next = [...allChartConfigs];
+                                                          const tmp = next[index - 1];
+                                                          next[index - 1] = next[index];
+                                                          next[index] = tmp;
+                                                          reorderCharts(next);
+                                                        }}
+                                                        title="Yukarı taşı"
+                                                      >
+                                                        ↑
+                                                      </button>
+                                                      <button
+                                                        className="px-2 py-1 text-xs border border-blue-300 text-blue-600 rounded hover:bg-blue-50 disabled:opacity-40"
+                                                        disabled={index === allChartConfigs.length - 1}
+                                                        onClick={() => {
+                                                          const next = [...allChartConfigs];
+                                                          const tmp = next[index + 1];
+                                                          next[index + 1] = next[index];
+                                                          next[index] = tmp;
+                                                          reorderCharts(next);
+                                                        }}
+                                                        title="Aşağı taşı"
+                                                      >
+                                                        ↓
+                                                      </button>
+                                                    </div>
+                                                  )}
                        </div>
                        <div className="p-3 transform-gpu will-change-transform">
                          {chartData && chartData.length > 0 ? (
@@ -2413,6 +2573,8 @@ export default function ReportDetailPage() {
                              analyzeData={analyzeData}
                              onSave={async (updatedConfig) => {
                                try {
+                                 console.log('🔄 Frontend\'den gelen güncelleme:', updatedConfig);
+                                 
                                  const payload = {
                                    name: updatedConfig.name || cfg.name,
                                    chart_type: updatedConfig.chart_type || cfg.chart_type,
@@ -2427,8 +2589,11 @@ export default function ReportDetailPage() {
                                    height: updatedConfig.height || cfg.height || 520,
                                    chart_options: cfg.chart_options || {},
                                    filters: filters,
-                                   is_default: cfg.is_default || false
+                                   is_default: cfg.is_default || false,
+                                   distinctColumn: updatedConfig.distinctColumn || cfg.distinctColumn || ''
                                  };
+                                 
+                                 console.log('📤 Backend\'e gönderilen payload:', payload);
                                  
                                  // Mevcut grafik ID'si ile PUT endpoint'ini kullan
                                  const res = await fetch(`http://localhost:5000/api/reports/${params.id}/chart-config/${cfg.id}`, {
@@ -2440,6 +2605,8 @@ export default function ReportDetailPage() {
                                    body: JSON.stringify(payload)
                                  });
                                  
+                                 console.log('📡 Backend yanıtı:', res.status, res.statusText);
+                                 
                                  if (res.ok) {
                                    // Listeyi yenile
                                    const listRes = await fetch(`http://localhost:5000/api/reports/${params.id}/chart-configs`, {
@@ -2448,16 +2615,21 @@ export default function ReportDetailPage() {
                                    });
                                    const listData = await listRes.json();
                                    if (listData.success) {
-                                     setAllChartConfigs(listData.configs || []);
+                                     const normalized = (listData.configs || []).map((cfg: any) => ({
+                                       ...cfg,
+                                       distinctColumn: cfg.distinctColumn || cfg.distinct_column || ''
+                                     }));
+                                     setAllChartConfigs(normalized);
                                      alert('Grafik başarıyla güncellendi!');
                                    }
                                  } else {
                                    const errorData = await res.json();
+                                   console.error('❌ Backend hata detayı:', errorData);
                                    alert(`Grafik güncellenirken hata oluştu: ${errorData.message || 'Bilinmeyen hata'}`);
                                  }
                                } catch (error) {
-                                 console.error('Grafik güncelleme hatası:', error);
-                                 alert('Grafik güncellenirken hata oluştu!');
+                                 console.error('❌ Frontend hata detayı:', error);
+                                 alert('Grafik güncellenirken hata oluştu: ' + (error instanceof Error ? error.message : 'Bilinmeyen hata'));
                                }
                              }}
                              onCancel={() => {
@@ -2480,7 +2652,11 @@ export default function ReportDetailPage() {
                                    });
                                    const listData = await listRes.json();
                                    if (listData.success) {
-                                     setAllChartConfigs(listData.configs || []);
+                                     const normalized = (listData.configs || []).map((cfg: any) => ({
+                                       ...cfg,
+                                       distinctColumn: cfg.distinctColumn || cfg.distinct_column || ''
+                                     }));
+                                     setAllChartConfigs(normalized);
                                      alert('Grafik başarıyla silindi!');
                                    }
                                  } else {

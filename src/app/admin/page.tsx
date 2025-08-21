@@ -200,7 +200,53 @@ export default function AdminPanel() {
         </div>
 
         {/* Main Admin Sections */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+          {/* Dashboard Yönetimi */}
+          <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Dashboard Yönetimi</h2>
+                <p className="text-gray-600 mt-1">Ana sayfa kartlarını yönet</p>
+              </div>
+              <Link href="/admin/dashboard" className="bg-gradient-to-r from-indigo-600 to-indigo-700 text-white px-4 py-2 rounded-xl hover:shadow-lg transition-all duration-300 font-semibold flex items-center">
+                <BarChart3 className="h-4 w-4 mr-2" />
+                Kartları Yönet
+              </Link>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="p-4 bg-gray-50 rounded-xl">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">Dashboard Kartları</h3>
+                    <p className="text-sm text-gray-500">Ana sayfa kartlarını düzenle</p>
+                  </div>
+                  <Link href="/admin/dashboard" className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg">
+                    <Edit className="h-4 w-4" />
+                  </Link>
+                </div>
+              </div>
+              
+              <div className="p-4 bg-gray-50 rounded-xl">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">MariaDB Sorguları</h3>
+                    <p className="text-sm text-gray-500">Kart verilerini çeken sorgular</p>
+                  </div>
+                  <Link href="/admin/dashboard" className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg">
+                    <Code className="h-4 w-4" />
+                  </Link>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <Link href="/admin/dashboard" className="w-full bg-indigo-100 text-indigo-700 px-4 py-3 rounded-xl text-center hover:bg-indigo-200 transition-all duration-300 font-semibold">
+                Dashboard Yönet →
+              </Link>
+            </div>
+          </div>
+
           {/* Şube Yönetimi */}
           <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
             <div className="flex items-center justify-between mb-6">

@@ -49,8 +49,8 @@ app.use('/api/users', require('./src/routes/users'));
 app.use('/api/admin', require('./src/routes/admin'));
 app.use('/api/admin/activity-logs', require('./src/routes/activity-logs'));
 
-// Test database connection
-app.use('/api/test-db', require('./src/routes/test-db'));
+// Test database connection - test-db.js silindi
+// app.use('/api/test-db', require('./src/routes/test-db'));
 
 // Branch cards
 app.use('/api/branch-cards', require('./src/routes/branch-cards'));

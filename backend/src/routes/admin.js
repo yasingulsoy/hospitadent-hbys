@@ -818,6 +818,47 @@ router.post('/database/save-query/:id/execute', async (req, res) => {
   }
 });
 
+// Toplu olarak sorguları public yap
+router.post('/database/make-public', authenticateToken, async (req, res) => {
+  try {
+    if (!req.user.role || (req.user.role !== 1 && req.user.role !== 2 && req.user.role !== '1' && req.user.role !== '2')) {
+      return res.status(403).json({
+        success: false,
+        message: 'Bu işlem için yetkiniz yok'
+      });
+    }
+
+    const { queryIds } = req.body;
+    
+    if (!Array.isArray(queryIds) || queryIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Sorgu ID\'leri gerekli'
+      });
+    }
+
+    // Toplu güncelleme
+    const result = await pool.query(
+      'UPDATE saved_queries SET is_public = true WHERE id = ANY($1) RETURNING id, name',
+      [queryIds]
+    );
+
+    res.json({
+      success: true,
+      message: `${result.rows.length} sorgu başarıyla public yapıldı`,
+      updatedQueries: result.rows
+    });
+
+  } catch (error) {
+    console.error('Toplu public yapma hatası:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Sorgular public yapılırken hata oluştu',
+      error: error.message
+    });
+  }
+});
+
 // Users endpoint'i ekle
 router.get('/users', async (req, res) => {
   try {

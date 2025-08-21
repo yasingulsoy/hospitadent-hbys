@@ -43,7 +43,17 @@ interface ChartCardProps {
 	onSave?: (config: any) => void;
 	onCancel?: () => void;
 	onDelete?: (config: any) => void;
-	editConfig?: any;
+	editConfig?: {
+		name?: string;
+		chart_type?: string;
+		x_axis?: string;
+		y_axis?: string;
+		aggregation?: 'sum' | 'count' | 'count_nonzero' | 'average' | 'min' | 'max' | 'distinct';
+		group_by?: string;
+		sort_by?: 'asc' | 'desc';
+		height?: number;
+		distinctColumn?: string;
+	};
 	isEditMode?: boolean;
 	analyzeData?: any; // Mevcut veri kolonları için
 	seriesKeys?: string[]; // Çoklu seri için anahtar dizisi
@@ -68,7 +78,17 @@ export default function ChartCard({
 	const safeData = Array.isArray(data) ? data : [];
 	const [isFlipped, setIsFlipped] = useState(false);
 	const [isEditorOpen, setIsEditorOpen] = useState(false);
-	const [localEditConfig, setLocalEditConfig] = useState(editConfig || {});
+	const [localEditConfig, setLocalEditConfig] = useState<{
+		name?: string;
+		chart_type?: string;
+		x_axis?: string;
+		y_axis?: string;
+		aggregation?: 'sum' | 'count' | 'count_nonzero' | 'average' | 'min' | 'max' | 'distinct';
+		group_by?: string;
+		sort_by?: 'asc' | 'desc';
+		height?: number;
+		distinctColumn?: string;
+	}>(editConfig || {});
 
 	// editConfig değiştiğinde localEditConfig'i güncelle
 	useEffect(() => {
@@ -94,12 +114,12 @@ export default function ChartCard({
 		return safeData.slice(0, 20);
 	}, [safeData, type]);
 
-	const bottomMargin = displayedData.length > 10 ? 90 : 50;
+	const bottomMargin = displayedData.length > 10 ? 130 : 80;
 	const MIN_ITEM_WIDTH = 120; // Yatay görünümde daha ferah, isimler net görünsün
 	const minWidth = type === 'pie' ? 1200 : Math.max(1200, displayedData.length * MIN_ITEM_WIDTH); // Pie chart için daha geniş
 
 	// Pie chart için özel yükseklik ayarı
-	const chartHeight = type === 'pie' ? Math.max(height, 600) : height;
+	const chartHeight = type === 'pie' ? Math.max(height, 600) : Math.max(height, 480);
 
 	// Yatay genişlik ölçeği: X ekseni sıkışıklığını kullanıcı genişletebilsin
 	const [widthScale, setWidthScale] = useState(1);
@@ -201,12 +221,43 @@ export default function ChartCard({
 
 	const scaledWidth = Math.max(minWidth, 600) * zoomScale * widthScale; // Minimum genişliği artırdım
 	const scaledHeight = chartHeight * zoomScale; // Pie chart için özel yükseklik
-	const formatLabel = (value: string) => (value?.length > 20 ? `${value.slice(0, 20)}…` : value); // Daha uzun isimler için
+	const formatLabel = (value: string) => (value ?? '');
 	
 	// Daha iyi görünürlük için renk ayarları
 	const labelColor = '#1F2937'; // Koyu gri
 	const gridColor = 'rgba(229, 231, 235, 0.2)'; // Daha şeffaf açık gri
 	const axisColor = '#1F2937'; // Daha koyu gri
+
+	// X ekseni için özel tick: etiketi -60° eğik ve çubuğun altına hizalı
+	const CustomTick = (props: any) => {
+		const { x, y, payload } = props || {};
+		const label = String(payload?.value ?? '');
+		return (
+			<g transform={`translate(${x},${y})`}>
+				<text
+					transform="rotate(-60)"
+					x={0}
+					y={0}
+					dx={-6}
+					dy={10}
+					textAnchor="end"
+					fill={axisColor}
+					fontSize={12}
+					fontWeight={600}
+					fontFamily="Arial, Helvetica, sans-serif"					dominantBaseline="middle"
+					style={{ 
+						pointerEvents: 'none',
+						textRendering: 'optimizeLegibility',
+						fontFeatureSettings: '"liga" 1, "kern" 1',
+						userSelect: 'none'
+					}}
+				>
+					<title>{label}</title>
+					{label}
+				</text>
+			</g>
+		);
+	};
 
 	// Tooltip için özel stil
 	const CustomTooltip = ({ active, payload, label }: any) => {
@@ -309,22 +360,33 @@ export default function ChartCard({
 
 	const handleSave = () => {
 		if (onSave) {
-			// Tüm düzenlenen alanları onSave'e gönder
-			const updatedConfig = {
-				...editConfig, // Mevcut konfigürasyonu koru
-				...localEditConfig, // Düzenlenen alanları üzerine yaz
-				// Özel alanları manuel olarak ayarla
-				name: localEditConfig.name || editConfig?.name || '',
-				chart_type: localEditConfig.chart_type || editConfig?.chart_type || type,
-				x_axis: localEditConfig.x_axis || editConfig?.x_axis || '',
-				y_axis: localEditConfig.y_axis || editConfig?.y_axis || '',
-				aggregation: localEditConfig.aggregation || editConfig?.aggregation || 'sum',
-				group_by: localEditConfig.group_by || editConfig?.group_by || '',
-				sort_by: localEditConfig.sort_by || editConfig?.sort_by || 'desc',
-				height: localEditConfig.height || editConfig?.height || height
-			};
-			onSave(updatedConfig);
-			setIsEditorOpen(false);
+			try {
+				// Tüm düzenlenen alanları onSave'e gönder
+				const updatedConfig = {
+					...editConfig, // Mevcut konfigürasyonu koru
+					...localEditConfig, // Düzenlenen alanları üzerine yaz
+					// Özel alanları manuel olarak ayarla
+					name: localEditConfig.name || editConfig?.name || '',
+					chart_type: localEditConfig.chart_type || editConfig?.chart_type || type,
+					x_axis: localEditConfig.x_axis || editConfig?.x_axis || '',
+					y_axis: localEditConfig.y_axis || editConfig?.y_axis || '',
+					aggregation: localEditConfig.aggregation || editConfig?.aggregation || 'sum',
+					group_by: localEditConfig.group_by || editConfig?.group_by || '',
+					sort_by: localEditConfig.sort_by || editConfig?.sort_by || 'desc',
+					height: localEditConfig.height || editConfig?.height || height,
+					distinctColumn: localEditConfig.distinctColumn || editConfig?.distinctColumn || ''
+				};
+				
+				console.log('Grafik konfigürasyonu güncelleniyor:', updatedConfig);
+				console.log('🔍 Distinct kolon:', localEditConfig.distinctColumn);
+				console.log('🔍 EditConfig distinct kolon:', editConfig?.distinctColumn);
+				onSave(updatedConfig);
+				setIsEditorOpen(false);
+			} catch (error) {
+				console.error('Grafik kaydetme hatası:', error);
+				const errorMessage = error instanceof Error ? error.message : 'Bilinmeyen hata';
+				alert('Grafik kaydedilirken hata oluştu: ' + errorMessage);
+			}
 		}
 	};
 
@@ -416,14 +478,21 @@ export default function ChartCard({
 					<label className="block text-sm font-medium text-gray-700 mb-2">Toplama Yöntemi *</label>
 					<select
 						value={localEditConfig.aggregation || 'sum'}
-						onChange={(e) => setLocalEditConfig({...localEditConfig, aggregation: e.target.value})}
+						onChange={(e) => setLocalEditConfig({
+							...localEditConfig, 
+							aggregation: e.target.value as 'sum' | 'count' | 'count_nonzero' | 'average' | 'min' | 'max' | 'distinct',
+							// Distinct seçilirse distinctColumn'u temizle
+							distinctColumn: e.target.value === 'distinct' ? '' : localEditConfig.distinctColumn
+						})}
 						className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
 					>
 						<option value="sum">Toplam (Değerleri topla)</option>
 						<option value="count">Sayı (Kayıt sayısı)</option>
+						<option value="count_nonzero">Sıfırdan Farklı Say (count_nonzero)</option>
 						<option value="average">Ortalama (Değerlerin ortalaması)</option>
 						<option value="min">Minimum (En düşük değer)</option>
 						<option value="max">Maksimum (En yüksek değer)</option>
+						<option value="distinct">Benzersiz Sayı (Distinct)</option>
 					</select>
 				</div>
 
@@ -443,12 +512,33 @@ export default function ChartCard({
 					<p className="text-xs text-gray-500 mt-1">Verileri gruplamak için kullanılacak kolon</p>
 				</div>
 
+				{/* Distinct Kolon Seçimi - sadece distinct seçildiğinde göster */}
+				{localEditConfig.aggregation === 'distinct' && (
+					<div>
+						<label className="block text-sm font-medium text-gray-700 mb-2">Distinct Yapılacak Kolon *</label>
+						<select
+							value={localEditConfig.distinctColumn || ''}
+							onChange={(e) => setLocalEditConfig({...localEditConfig, distinctColumn: e.target.value})}
+							className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+						>
+							<option value="">Kolon Seçin</option>
+							{analyzeData?.categoricalColumns?.map((col: string) => (
+								<option key={col} value={col}>{col}</option>
+							))}
+							{analyzeData?.numericColumns?.map((col: string) => (
+								<option key={col} value={col}>{col}</option>
+							))}
+						</select>
+						<p className="text-xs text-gray-500 mt-1">Benzersiz değerleri saymak için kullanılacak kolon</p>
+					</div>
+				)}
+
 				{/* Sıralama */}
 				<div>
 					<label className="block text-sm font-medium text-gray-700 mb-2">Sıralama *</label>
 					<select
 						value={localEditConfig.sort_by || 'desc'}
-						onChange={(e) => setLocalEditConfig({...localEditConfig, sort_by: e.target.value})}
+						onChange={(e) => setLocalEditConfig({...localEditConfig, sort_by: e.target.value as 'asc' | 'desc'})}
 						className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
 					>
 						<option value="desc">Azalan (Büyükten Küçüğe)</option>
@@ -583,16 +673,23 @@ export default function ChartCard({
 									<CartesianGrid strokeDasharray="3 3" stroke={gridColor} strokeWidth={0.5} />
 									<XAxis 
 										dataKey="label" 
-										angle={-45} 
-										textAnchor="end" 
 										interval={0} 
 										height={bottomMargin} 
-										tick={{ fontSize: 12, fill: axisColor, fontWeight: 600 }} 
+										angle={-60}
+										tick={{ fill: axisColor, fontSize: 12, fontWeight: 600, textAnchor: 'end' }}
 										tickFormatter={formatLabel}
 										axisLine={{ stroke: axisColor }}
-										tickMargin={10}
+										tickMargin={20}
+										dy={10}
+										dx={-6}
 									/>
-									<YAxis tick={{ fill: axisColor, fontSize: 12, fontWeight: 600 }} axisLine={{ stroke: axisColor }} tickMargin={10} allowDecimals {...yAxisProps} />
+									<YAxis 
+										tick={{ fill: axisColor, fontSize: 12, fontWeight: 600 }} 
+										axisLine={{ stroke: axisColor }} 
+										tickMargin={10} 
+										allowDecimals 
+										{...yAxisProps} 
+									/>
 									<Tooltip content={<CustomTooltip />} cursor={false} wrapperStyle={{ zIndex: 10000 }} />
 									<Bar dataKey="value" fill="#3B82F6" radius={[4, 4, 0, 0]} />
 								</BarChart>
@@ -601,16 +698,23 @@ export default function ChartCard({
 									<CartesianGrid strokeDasharray="3 3" stroke={gridColor} strokeWidth={0.5} />
 									<XAxis 
 										dataKey="label" 
-										angle={-45} 
-										textAnchor="end" 
 										interval={0} 
 										height={bottomMargin} 
-										tick={{ fontSize: 12, fill: axisColor, fontWeight: 600 }} 
+										angle={-60}
+										tick={{ fill: axisColor, fontSize: 12, fontWeight: 600, textAnchor: 'end' }}
 										tickFormatter={formatLabel}
 										axisLine={{ stroke: axisColor }}
-										tickMargin={10}
+										tickMargin={20}
+										dy={10}
+										dx={-6}
 									/>
-									<YAxis tick={{ fill: axisColor, fontSize: 12, fontWeight: 600 }} axisLine={{ stroke: axisColor }} tickMargin={10} allowDecimals {...yAxisProps} />
+									<YAxis 
+										tick={{ fill: axisColor, fontSize: 12, fontWeight: 600 }} 
+										axisLine={{ stroke: axisColor }} 
+										tickMargin={10} 
+										allowDecimals 
+										{...yAxisProps} 
+									/>
 									<Tooltip content={<CustomTooltip />} cursor={false} wrapperStyle={{ zIndex: 10000 }} />
 									<Line type="monotone" dataKey="value" stroke="#3B82F6" strokeWidth={3} dot={{ r: 4, fill: '#3B82F6' }} />
 								</LineChart>
@@ -619,16 +723,23 @@ export default function ChartCard({
 									<CartesianGrid strokeDasharray="3 3" stroke={gridColor} strokeWidth={0.5} />
 									<XAxis 
 										dataKey="label" 
-										angle={-45} 
-										textAnchor="end" 
 										interval={0} 
 										height={bottomMargin} 
-										tick={{ fontSize: 12, fill: axisColor, fontWeight: 600 }} 
+										angle={-60}
+										tick={{ fill: axisColor, fontSize: 12, fontWeight: 600, textAnchor: 'end' }}
 										tickFormatter={formatLabel}
 										axisLine={{ stroke: axisColor }}
-										tickMargin={10}
+										tickMargin={20}
+										dy={10}
+										dx={-6}
 									/>
-									<YAxis tick={{ fill: axisColor, fontSize: 12, fontWeight: 600 }} axisLine={{ stroke: axisColor }} tickMargin={10} allowDecimals {...yAxisProps} />
+									<YAxis 
+										tick={{ fill: axisColor, fontSize: 12, fontWeight: 600 }} 
+										axisLine={{ stroke: axisColor }} 
+										tickMargin={10} 
+										allowDecimals 
+										{...yAxisProps} 
+									/>
 									<Tooltip content={<CustomTooltip />} cursor={false} wrapperStyle={{ zIndex: 10000 }} />
 									<Legend content={<CustomLegend />} />
 									{seriesKeys?.map((key, index) => (

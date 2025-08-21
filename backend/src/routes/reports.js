@@ -5,6 +5,411 @@ const mysql = require('mysql2/promise');
 
 const router = express.Router();
 
+// Dashboard kartları için endpoint'ler
+// Tüm dashboard kartlarını getir
+router.get('/dashboard-cards', authenticateToken, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM dashboard_cards WHERE is_active = true ORDER BY sort_order ASC, id ASC'
+    );
+    
+    res.json({
+      success: true,
+      data: rows
+    });
+  } catch (error) {
+    console.error('Dashboard kartları getirme hatası:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Dashboard kartları alınırken hata oluştu',
+      error: error.message
+    });
+  }
+});
+
+// Dashboard kartı ekle/güncelle (admin/superadmin)
+router.post('/dashboard-cards', authenticateToken, async (req, res) => {
+  try {
+    if (!req.user.role || (req.user.role !== 1 && req.user.role !== 2 && req.user.role !== '1' && req.user.role !== '2')) {
+      return res.status(403).json({
+        success: false,
+        message: 'Bu işlem için yetkiniz yok'
+      });
+    }
+
+    const { id, name, display_name, query, card_type, icon, color, is_active, sort_order } = req.body;
+
+    if (!name || !display_name || !query || !card_type) {
+      return res.status(400).json({
+        success: false,
+        message: 'name, display_name, query ve card_type alanları zorunludur'
+      });
+    }
+
+    let result;
+    if (id) {
+      // Güncelleme
+      const { rows } = await pool.query(
+        `UPDATE dashboard_cards SET 
+          name = $1, display_name = $2, query = $3, card_type = $4, 
+          icon = $5, color = $6, is_active = $7, sort_order = $8, 
+          updated_at = CURRENT_TIMESTAMP
+         WHERE id = $9 RETURNING *`,
+        [name, display_name, query, card_type, icon, color, is_active, sort_order, id]
+      );
+      result = rows[0];
+    } else {
+      // Yeni ekleme
+      const { rows } = await pool.query(
+        `INSERT INTO dashboard_cards 
+          (name, display_name, query, card_type, icon, color, is_active, sort_order)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        [name, display_name, query, card_type, icon, color, is_active, sort_order]
+      );
+      result = rows[0];
+    }
+
+    res.json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    console.error('Dashboard kartı kaydetme hatası:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Dashboard kartı kaydedilemedi',
+      error: error.message
+    });
+  }
+});
+
+// Dashboard kartı sil (admin/superadmin)
+router.delete('/dashboard-cards/:id', authenticateToken, async (req, res) => {
+  try {
+    if (!req.user.role || (req.user.role !== 1 && req.user.role !== 2 && req.user.role !== '1' && req.user.role !== '2')) {
+      return res.status(403).json({
+        success: false,
+        message: 'Bu işlem için yetkiniz yok'
+      });
+    }
+
+    const { id } = req.params;
+    await pool.query('DELETE FROM dashboard_cards WHERE id = $1', [id]);
+    
+    res.json({
+      success: true,
+      message: 'Dashboard kartı başarıyla silindi'
+    });
+  } catch (error) {
+    console.error('Dashboard kartı silme hatası:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Dashboard kartı silinemedi',
+      error: error.message
+    });
+  }
+});
+
+// Dashboard kartlarının verilerini MariaDB'den çek
+router.get('/dashboard-data', authenticateToken, async (req, res) => {
+  try {
+    // Aktif dashboard kartlarını getir
+    const { rows: cards } = await pool.query(
+      'SELECT * FROM dashboard_cards WHERE is_active = true ORDER BY sort_order ASC, id ASC'
+    );
+
+    if (cards.length === 0) {
+      return res.json({
+        success: true,
+        data: []
+      });
+    }
+
+    // MariaDB bağlantısı kur
+    const connRes = await pool.query('SELECT * FROM data_connections WHERE is_active = true ORDER BY updated_at DESC LIMIT 1');
+    if (connRes.rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Veritabanı bağlantısı kurulamadı. Lütfen daha sonra tekrar deneyin.',
+        technicalError: 'No active database connection'
+      });
+    }
+    const conn = connRes.rows[0];
+
+    const mariadb = await mysql.createConnection({
+      host: conn.host,
+      port: parseInt(conn.port),
+      user: conn.username,
+      password: conn.password || '',
+      database: conn.database_name
+    });
+
+    // Her kart için MariaDB'de sorguyu çalıştır
+    const dashboardData = [];
+    
+    for (const card of cards) {
+      try {
+        const [result] = await mariadb.execute(card.query);
+        
+        let value = 0;
+        let additionalData = {};
+        
+        // Kart türüne göre veriyi işle
+        switch (card.card_type) {
+          case 'branch':
+            value = result[0]?.count || 0;
+            additionalData = {
+              status: value > 0 ? 'Tümü Aktif' : 'Aktif Değil',
+              statusColor: value > 0 ? 'green' : 'red'
+            };
+            break;
+            
+          case 'patient':
+            // monthly_patients kartı için özel işlem
+            if (card.name === 'monthly_patients') {
+              const row = result?.[0] || {};
+              // current_month_patients kolonunu ara
+              const candidateKeys = [
+                'current_month_patients', 'CURRENT_MONTH_PATIENTS',
+                'count', 'COUNT',
+                'total_patients', 'TOTAL_PATIENTS'
+              ];
+              let extracted = 0;
+              for (const key of candidateKeys) {
+                if (row[key] !== undefined && row[key] !== null) {
+                  const num = Number(row[key]);
+                  if (!Number.isNaN(num)) { extracted = num; break; }
+                  const parsed = parseFloat(String(row[key]));
+                  if (!Number.isNaN(parsed)) { extracted = parsed; break; }
+                }
+              }
+              value = extracted || 0;
+              
+              // Trend bilgisini hesapla
+              const growthPercentage = row.patient_growth_percentage || row.PATIENT_GROWTH_PERCENTAGE || 0;
+              let trendText = '';
+              let trendColor = 'green';
+              
+              if (growthPercentage !== null && growthPercentage !== undefined) {
+                if (growthPercentage > 0) {
+                  trendText = `+${growthPercentage}% geçen aya göre`;
+                  trendColor = 'green';
+                } else if (growthPercentage < 0) {
+                  trendText = `${growthPercentage}% geçen aya göre`;
+                  trendColor = 'red';
+                } else {
+                  trendText = 'Geçen ay ile aynı';
+                  trendColor = 'blue';
+                }
+              }
+              
+              additionalData = {
+                status: 'Aktif hastalar',
+                statusColor: 'green',
+                trend: trendText,
+                trendColor: trendColor,
+                percentageChange: growthPercentage
+              };
+            } else {
+              // Diğer patient kartları için standart işlem
+              value = result[0]?.count || 0;
+              additionalData = {
+                status: 'Aktif hastalar',
+                statusColor: 'blue'
+              };
+            }
+            break;
+            
+          case 'appointment':
+            // monthly_appointments kartı için özel işlem
+            if (card.name === 'monthly_appointments') {
+              const row = result?.[0] || {};
+              // current_month_appointments kolonunu ara
+              const candidateKeys = [
+                'current_month_appointments', 'CURRENT_MONTH_APPOINTMENTS',
+                'count', 'COUNT',
+                'total_appointments', 'TOTAL_APPOINTMENTS'
+              ];
+              let extracted = 0;
+              for (const key of candidateKeys) {
+                if (row[key] !== undefined && row[key] !== null) {
+                  const num = Number(row[key]);
+                  if (!Number.isNaN(num)) { extracted = num; break; }
+                  const parsed = parseFloat(String(row[key]));
+                  if (!Number.isNaN(parsed)) { extracted = parsed; break; }
+                }
+              }
+              value = extracted || 0;
+              
+              // Trend bilgisini hesapla
+              const growthPercentage = row.appointment_growth_percentage || row.APPOINTMENT_GROWTH_PERCENTAGE || 0;
+              let trendText = '';
+              let trendColor = 'green';
+              
+              if (growthPercentage !== null && growthPercentage !== undefined) {
+                if (growthPercentage > 0) {
+                  trendText = `+${growthPercentage}% geçen aya göre`;
+                  trendColor = 'green';
+                } else if (growthPercentage < 0) {
+                  trendText = `${growthPercentage}% geçen aya göre`;
+                  trendColor = 'red';
+                } else {
+                  trendText = 'Geçen ay ile aynı';
+                  trendColor = 'blue';
+                }
+              }
+              
+              additionalData = {
+                status: 'Aylık randevular',
+                statusColor: 'purple',
+                trend: trendText,
+                trendColor: trendColor,
+                percentageChange: growthPercentage
+              };
+            } else {
+              // Diğer appointment kartları için standart işlem
+              value = result[0]?.count || 0;
+              additionalData = {
+                status: 'Bugünkü randevular',
+                statusColor: 'purple'
+              };
+            }
+            break;
+            
+          case 'revenue':
+            // Esnek kolon adı desteği: dashboard kartı sorguları farklı alias'lar döndürebilir
+            // Örn: total_income, current_month_income vb.
+            {
+              const row = result?.[0] || {};
+              const candidateKeys = [
+                'total_income', 'TOTAL_INCOME',
+                'current_month_income', 'CURRENT_MONTH_INCOME',
+                'today_income', 'TODAY_INCOME',
+                'income', 'INCOME',
+                'amount', 'AMOUNT',
+                'sum', 'SUM',
+                'value', 'VALUE'
+              ];
+              let extracted = 0;
+              for (const key of candidateKeys) {
+                if (row[key] !== undefined && row[key] !== null) {
+                  const num = Number(row[key]);
+                  if (!Number.isNaN(num)) { extracted = num; break; }
+                  const parsed = parseFloat(String(row[key]));
+                  if (!Number.isNaN(parsed)) { extracted = parsed; break; }
+                }
+              }
+              value = extracted || 0;
+            }
+            additionalData = {
+              status: 'Aylık gelir',
+              statusColor: 'green'
+            };
+            
+            // Trend bilgisini hesapla (revenue kartları için)
+            if (card.name === 'monthly_revenue') {
+              const row = result?.[0] || {};
+              const growthPercentage = row.growth_percentage || row.GROWTH_PERCENTAGE || 0;
+              let trendText = '';
+              let trendColor = 'green';
+              
+              if (growthPercentage !== null && growthPercentage !== undefined) {
+                if (growthPercentage > 0) {
+                  trendText = `+${growthPercentage}% geçen aya göre`;
+                  trendColor = 'green';
+                } else if (growthPercentage < 0) {
+                  trendText = `${growthPercentage}% geçen aya göre`;
+                  trendColor = 'red';
+                } else {
+                  trendText = 'Geçen ay ile aynı';
+                  trendColor = 'blue';
+                }
+              }
+              
+              additionalData = {
+                status: 'Aylık gelir',
+                statusColor: 'green',
+                trend: trendText,
+                trendColor: trendColor,
+                percentageChange: growthPercentage
+              };
+            } else if (card.name === 'daily_revenue') {
+              const row = result?.[0] || {};
+              const growthPercentage = row.growth_percentage || row.GROWTH_PERCENTAGE || 0;
+              let trendText = '';
+              let trendColor = 'green';
+              
+              if (growthPercentage !== null && growthPercentage !== undefined) {
+                if (growthPercentage > 0) {
+                  trendText = `+${growthPercentage}% düne göre`;
+                  trendColor = 'green';
+                } else if (growthPercentage < 0) {
+                  trendText = `${growthPercentage}% düne göre`;
+                  trendColor = 'red';
+                } else {
+                  trendText = 'Dün ile aynı';
+                  trendColor = 'blue';
+                }
+              }
+              
+              additionalData = {
+                status: 'Günlük gelir',
+                statusColor: 'orange',
+                trend: trendText,
+                trendColor: trendColor,
+                percentageChange: growthPercentage
+              };
+            }
+            break;
+            
+          default:
+            value = result[0]?.count || result[0]?.total_income || 0;
+        }
+        
+        dashboardData.push({
+          id: card.id,
+          name: card.name,
+          display_name: card.display_name,
+          card_type: card.card_type,
+          icon: card.icon,
+          color: card.color,
+          value: card.card_type === 'revenue' ? `₺${value.toLocaleString('tr-TR')}` : value.toString(),
+          additionalData
+        });
+        
+      } catch (queryError) {
+        console.error(`Dashboard kartı sorgu hatası (${card.name}):`, queryError);
+        dashboardData.push({
+          id: card.id,
+          name: card.name,
+          display_name: card.display_name,
+          card_type: card.card_type,
+          icon: card.icon,
+          color: card.color,
+          value: '0',
+          additionalData: {},
+          error: 'Sorgu çalıştırılamadı'
+        });
+      }
+    }
+
+    await mariadb.end();
+
+    res.json({
+      success: true,
+      data: dashboardData
+    });
+
+  } catch (error) {
+    console.error('Dashboard veri getirme hatası:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Dashboard verileri alınırken hata oluştu',
+      error: error.message
+    });
+  }
+});
+
 // Genel istatistikler
 router.get('/stats', authenticateToken, async (req, res) => {
   try {
@@ -43,68 +448,72 @@ router.get('/stats', authenticateToken, async (req, res) => {
       }
     };
 
-    // İstatistikleri hesapla
-    const [
-      totalPatients,
-      totalAppointments,
-      totalTreatments,
-      appointmentStats,
-      treatmentStats
-    ] = await Promise.all([
-      // Toplam hasta sayısı
-      prisma.patient.count({ where }),
-      
-      // Toplam randevu sayısı
-      prisma.appointment.count({ where: dateWhere }),
-      
-      // Toplam tedavi sayısı
-      prisma.treatment.count({ where: dateWhere }),
-      
-      // Randevu istatistikleri
-      prisma.appointment.groupBy({
-        by: ['status'],
-        where: dateWhere,
-        _count: {
-          status: true
+    // MariaDB bağlantısı kur
+    const connRes = await pool.query('SELECT * FROM data_connections WHERE is_active = true ORDER BY updated_at DESC LIMIT 1');
+    if (connRes.rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Veritabanı bağlantısı kurulamadı. Lütfen daha sonra tekrar deneyin.',
+        technicalError: 'No active database connection'
+      });
+    }
+    const conn = connRes.rows[0];
+
+    const mariadb = await mysql.createConnection({
+      host: conn.host,
+      port: parseInt(conn.port),
+      user: conn.username,
+      password: conn.password || '',
+      database: conn.database_name
+    });
+
+    // Dashboard kartlarından veri çek
+    const { rows: dashboardCards } = await pool.query(
+      'SELECT * FROM dashboard_cards WHERE is_active = true ORDER BY sort_order ASC, id ASC'
+    );
+
+    // Basit istatistikler - dashboard kartlarından
+    const stats = {
+      totalPatients: 0,
+      totalAppointments: 0,
+      totalTreatments: 0
+    };
+
+    // Dashboard kartlarından veri topla
+    for (const card of dashboardCards) {
+      if (card.card_type === 'patient') {
+        try {
+          const [result] = await mariadb.execute(card.query);
+          stats.totalPatients = result[0]?.count || 0;
+        } catch (error) {
+          console.error('Patient stats error:', error);
         }
-      }),
-      
-      // Tedavi istatistikleri
-      prisma.treatment.groupBy({
-        by: ['type'],
-        where: dateWhere,
-        _count: {
-          type: true
-        },
-        _sum: {
-          cost: true
+      } else if (card.card_type === 'appointment') {
+        try {
+          const [result] = await mariadb.execute(card.query);
+          stats.totalAppointments = result[0]?.count || 0;
+        } catch (error) {
+          console.error('Appointment stats error:', error);
         }
-      })
-    ]);
+      } else if (card.card_type === 'treatment') {
+        try {
+          const [result] = await mariadb.execute(card.query);
+          stats.totalTreatments = result[0]?.count || 0;
+        } catch (error) {
+          console.error('Treatment stats error:', error);
+        }
+      }
+    }
 
-    // Randevu durumları
-    const appointmentStatuses = {};
-    appointmentStats.forEach(stat => {
-      appointmentStatuses[stat.status] = stat._count.status;
-    });
+    const totalPatients = stats.totalPatients;
+    const totalAppointments = stats.totalAppointments;
+    const totalTreatments = stats.totalTreatments;
 
-    // Tedavi türleri
-    const treatmentTypes = {};
-    treatmentStats.forEach(stat => {
-      treatmentTypes[stat.type] = {
-        count: stat._count.type,
-        revenue: stat._sum.cost || 0
-      };
-    });
+    // Basit istatistikler
+    const appointmentStatuses = { 'active': totalAppointments };
+    const treatmentTypes = { 'total': { count: totalTreatments, revenue: 0 } };
 
-    // Gelir durumları
-    const revenueStatuses = {};
-    revenueStats.forEach(stat => {
-      revenueStatuses[stat.status] = {
-        total: stat._sum.total || 0,
-        count: stat._count.status
-      };
-    });
+    await mariadb.end();
 
     res.json({
       success: true,
@@ -113,12 +522,10 @@ router.get('/stats', authenticateToken, async (req, res) => {
         summary: {
           totalPatients,
           totalAppointments,
-          totalTreatments,
-
+          totalTreatments
         },
         appointments: appointmentStatuses,
-        treatments: treatmentTypes,
-
+        treatments: treatmentTypes
       }
     });
 
@@ -1637,7 +2044,7 @@ router.get('/:reportId/chart-configs', authenticateToken, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT * FROM report_chart_configs
        WHERE report_id = $1 AND is_active = TRUE
-       ORDER BY is_default DESC, updated_at DESC`,
+       ORDER BY is_default DESC, sort_order ASC, updated_at DESC`,
       [reportId]
     );
     return res.json({ success: true, configs: rows });
@@ -1677,6 +2084,13 @@ router.get('/:reportId/chart-config/:configId', authenticateToken, async (req, r
 // Belirli bir grafik konfigürasyonunu güncelle (düzenleme için)
 router.put('/:reportId/chart-config/:configId', authenticateToken, async (req, res) => {
   try {
+    console.log('🔄 Grafik konfigürasyonu güncelleniyor:', {
+      reportId: req.params.reportId,
+      configId: req.params.configId,
+      body: req.body,
+      user: req.user
+    });
+
     if (!isAdminOrSuper(req.user)) {
       return res.status(403).json({ success: false, message: 'Bu işlem için yetkiniz yok' });
     }
@@ -1688,7 +2102,7 @@ router.put('/:reportId/chart-config/:configId', authenticateToken, async (req, r
       return res.status(400).json({ success: false, message: 'Geçersiz reportId veya configId' });
     }
 
-    const {
+    let {
       name,
       chart_type,
       x_axis,
@@ -1702,8 +2116,18 @@ router.put('/:reportId/chart-config/:configId', authenticateToken, async (req, r
       height,
       chart_options,
       filters,
-      is_default
+      is_default,
+      sort_order,
+      distinctColumn
     } = req.body || {};
+
+    // count_nonzero değerini count olarak kaydet (veritabanı constraint'i için)
+    let aggregation_display = aggregation;
+    // count_nonzero değeri artık direkt kaydedilebilir
+
+    console.log('📊 Güncellenecek veriler:', {
+      name, chart_type, x_axis, y_axis, aggregation, sort_by, group_by, height, distinctColumn
+    });
 
     if (!chart_type || !x_axis || !y_axis) {
       return res.status(400).json({ success: false, message: 'chart_type, x_axis ve y_axis zorunludur' });
@@ -1730,6 +2154,7 @@ router.put('/:reportId/chart-config/:configId', authenticateToken, async (req, r
         chart_options = $14,
         filters = $15,
         is_default = $16,
+        distinct_column = $17,
         updated_at = NOW()
       WHERE id = $2 AND report_id = $1
       RETURNING *;
@@ -1751,13 +2176,22 @@ router.put('/:reportId/chart-config/:configId', authenticateToken, async (req, r
       height,
       chart_options || {},
       filters || {},
-      !!is_default
+      !!is_default,
+      distinctColumn || ''
     ];
+
+    console.log('🔍 SQL parametreleri:', params);
+    console.log('📝 SQL sorgusu:', updateSql);
 
     const { rows } = await pool.query(updateSql, params);
     
     if (rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Grafik konfigürasyonu bulunamadı' });
+    }
+
+    // sort_order verildiyse ayrıca güncelle
+    if (typeof sort_order === 'number' && Number.isFinite(sort_order)) {
+      await pool.query('UPDATE report_chart_configs SET sort_order = $1 WHERE id = $2 AND report_id = $3', [sort_order, configId, reportId]);
     }
 
     return res.json({ success: true, config: rows[0] });
@@ -1793,7 +2227,8 @@ router.post('/:reportId/chart-config', authenticateToken, async (req, res) => {
       height = 480,
       chart_options = {},
       filters = {},
-      is_default = true
+      is_default = true,
+      distinctColumn
     } = req.body || {};
 
     if (!chart_type || !x_axis || !y_axis) {
@@ -1821,10 +2256,10 @@ router.post('/:reportId/chart-config', authenticateToken, async (req, res) => {
     const upsertSql = `
       INSERT INTO report_chart_configs (
         report_id, name, chart_type, x_axis, y_axis, x_axis_type, y_axis_type, series,
-        aggregation, sort_by, group_by, height, chart_options, filters, is_default
+        aggregation, sort_by, group_by, height, chart_options, filters, is_default, distinct_column
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8,
-        $9, $10, $11, $12, $13, $14, $15
+        $9, $10, $11, $12, $13, $14, $15, $16
       )
       ON CONFLICT (report_id, name) DO UPDATE SET
         chart_type = EXCLUDED.chart_type,
@@ -1840,6 +2275,7 @@ router.post('/:reportId/chart-config', authenticateToken, async (req, res) => {
         chart_options = EXCLUDED.chart_options,
         filters = EXCLUDED.filters,
         is_default = EXCLUDED.is_default,
+        distinct_column = EXCLUDED.distinct_column,
         updated_at = NOW()
       RETURNING *;
     `;
@@ -1859,14 +2295,119 @@ router.post('/:reportId/chart-config', authenticateToken, async (req, res) => {
       height,
       chart_options,
       filters,
-      !!is_default
+      !!is_default,
+      distinctColumn || ''
     ];
 
     const { rows } = await pool.query(upsertSql, params);
+
+    // Yeni kayıt için sort_order'ı kuyruğa ekle (mevcutların sonuna)
+    const inserted = rows[0];
+    if (inserted && inserted.id) {
+      const nextOrderResult = await pool.query('SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order FROM report_chart_configs WHERE report_id = $1', [reportId]);
+      const nextOrder = nextOrderResult.rows?.[0]?.next_order || 1;
+      await pool.query('UPDATE report_chart_configs SET sort_order = $1 WHERE id = $2', [nextOrder, inserted.id]);
+      inserted.sort_order = nextOrder;
+    }
+
     return res.json({ success: true, config: rows[0] });
   } catch (error) {
     console.error('chart-config upsert error:', error);
     return res.status(500).json({ success: false, message: 'Konfigürasyon kaydedilemedi', error: error.message });
+  }
+});
+
+// Çoklu sıralama güncelle (admin/superadmin)
+router.put('/:reportId/chart-configs/reorder', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    if (!isAdminOrSuper(req.user)) {
+      return res.status(403).json({ success: false, message: 'Bu işlem için yetkiniz yok' });
+    }
+
+    const reportId = parseInt(req.params.reportId);
+    if (Number.isNaN(reportId)) {
+      return res.status(400).json({ success: false, message: 'Geçersiz reportId' });
+    }
+
+    const { order } = req.body || {};
+    if (!Array.isArray(order) || order.length === 0) {
+      return res.status(400).json({ success: false, message: 'Geçersiz sıralama verisi' });
+    }
+
+    await client.query('BEGIN');
+    for (const item of order) {
+      const id = parseInt(item.id);
+      const sortOrder = parseInt(item.sort_order);
+      if (!Number.isNaN(id) && Number.isFinite(sortOrder)) {
+        await client.query('UPDATE report_chart_configs SET sort_order = $1 WHERE id = $2 AND report_id = $3', [sortOrder, id, reportId]);
+      }
+    }
+    await client.query('COMMIT');
+    return res.json({ success: true });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('chart-configs reorder error:', error);
+    return res.status(500).json({ success: false, message: 'Sıralama güncellenemedi', error: error.message });
+  } finally {
+    client.release();
+  }
+});
+
+// Veritabanı constraint'lerini kontrol et ve güncelle (debug için)
+router.get('/debug/constraints', authenticateToken, async (req, res) => {
+  try {
+    if (!isAdminOrSuper(req.user)) {
+      return res.status(403).json({ success: false, message: 'Bu işlem için yetkiniz yok' });
+    }
+
+    // Mevcut constraint'leri kontrol et
+    const constraintQuery = `
+      SELECT conname, pg_get_constraintdef(oid) as definition
+      FROM pg_constraint 
+      WHERE conrelid = 'report_chart_configs'::regclass 
+      AND conname = 'report_chart_configs_aggregation_check'
+    `;
+    
+    const constraintResult = await pool.query(constraintQuery);
+    
+    if (constraintResult.rows.length > 0) {
+      const constraint = constraintResult.rows[0];
+      console.log('🔍 Mevcut constraint:', constraint);
+      
+      // Constraint'i güncelle - count_nonzero ekle
+      const updateConstraintQuery = `
+        ALTER TABLE report_chart_configs 
+        DROP CONSTRAINT IF EXISTS report_chart_configs_aggregation_check;
+        
+        ALTER TABLE report_chart_configs 
+        ADD CONSTRAINT report_chart_configs_aggregation_check 
+        CHECK (aggregation IN ('sum', 'count', 'count_nonzero', 'average', 'avg', 'min', 'max', 'distinct'));
+      `;
+      
+      await pool.query(updateConstraintQuery);
+      console.log('✅ Constraint güncellendi');
+      
+      return res.json({ 
+        success: true, 
+        message: 'Constraint güncellendi',
+        oldConstraint: constraint,
+        newConstraint: 'sum, count, count_nonzero, average, avg, min, max'
+      });
+    } else {
+      return res.json({ 
+        success: false, 
+        message: 'Constraint bulunamadı',
+        constraints: constraintResult.rows
+      });
+    }
+  } catch (error) {
+    console.error('Constraint güncelleme hatası:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Constraint güncellenemedi', 
+      error: error.message 
+    });
   }
 });
 
@@ -1887,3 +2428,306 @@ router.delete('/chart-config/:configId', authenticateToken, async (req, res) => 
     return res.status(500).json({ success: false, message: 'Konfigürasyon silinemedi', error: error.message });
   }
 });
+
+// Aylık gelir endpoint'i (dashboard_cards tablosundan sorgu çalıştırır)
+router.get('/monthly-revenue', authenticateToken, async (req, res) => {
+  try {
+    console.log('🔍 Monthly revenue endpoint çağrıldı');
+    
+    // Aktif MariaDB bağlantısı
+    const connRes = await pool.query('SELECT * FROM data_connections WHERE is_active = true ORDER BY updated_at DESC LIMIT 1');
+    if (connRes.rows.length === 0) {
+      console.log('❌ Aktif veritabanı bağlantısı bulunamadı');
+      return res.status(400).json({
+        success: false,
+        message: 'Veritabanı bağlantısı kurulamadı. Lütfen daha sonra tekrar deneyin.',
+        technicalError: 'No active database connection'
+      });
+    }
+    const conn = connRes.rows[0];
+    console.log('✅ Veritabanı bağlantısı bulundu:', conn.host, conn.database_name);
+
+    // Dashboard kartından (dashboard_cards) aylık gelir sorgusunu getir
+    const cardResult = await pool.query(
+      'SELECT query FROM dashboard_cards WHERE name = $1 AND is_active = true ORDER BY updated_at DESC NULLS LAST, id DESC LIMIT 1',
+      ['monthly_revenue']
+    );
+    const dashboardCardRow = cardResult.rows[0];
+    if (!dashboardCardRow || !dashboardCardRow.query) {
+      console.log('❌ monthly_revenue dashboard kartı bulunamadı');
+      return res.status(400).json({ success: false, message: 'Aylık gelir için dashboard_cards içinde sorgu bulunamadı' });
+    }
+    console.log('✅ Dashboard kartı bulundu, sorgu uzunluğu:', dashboardCardRow.query.length);
+
+    // MariaDB bağlantısı
+    const mariadb = await mysql.createConnection({
+      host: conn.host,
+      port: parseInt(conn.port),
+      user: conn.username,
+      password: conn.password || '',
+      database: conn.database_name
+    });
+    console.log('✅ MariaDB bağlantısı kuruldu');
+
+    const sql = dashboardCardRow.query;
+    console.log('🔍 Çalıştırılacak SQL sorgusu:');
+    console.log(sql);
+
+    // Sorguyu çalıştır
+    const [rows] = await mariadb.execute(sql);
+    await mariadb.end();
+    console.log('✅ MariaDB sorgusu tamamlandı');
+
+    // Debug: Sorgu sonucunu logla
+    console.log('🔍 SQL Sonucu (rows):', rows);
+    console.log('🔍 Sonuç tipi:', typeof rows);
+    console.log('🔍 Sonuç uzunluğu:', rows ? rows.length : 'undefined');
+
+    if (!rows || rows.length === 0) {
+      console.log('❌ Sorgu sonucu boş, varsayılan değerler döndürülüyor');
+      return res.json({
+        success: true,
+        data: {
+          currentMonth: { name: '', year: 0, income: 0 },
+          lastMonth: { name: '', year: 0, income: 0 },
+          percentageChange: 0,
+          totalIncome: 0
+        }
+      });
+    }
+
+    const result = rows[0];
+    console.log('🔍 İlk satır sonucu:', result);
+    console.log('🔍 Kolon isimleri:', Object.keys(result));
+    console.log('🔍 Sonuç değerleri:', {
+      'CURRENT_MONTH_INCOME': result.CURRENT_MONTH_INCOME,
+      'current_month_income': result.current_month_income,
+      'PREVIOUS_MONTH_INCOME': result.PREVIOUS_MONTH_INCOME,
+      'previous_month_income': result.previous_month_income,
+      'GROWTH_PERCENTAGE': result.GROWTH_PERCENTAGE,
+      'growth_percentage': result.growth_percentage
+    });
+    
+    // Kolon isimlerini her iki durumu da destekleyecek şekilde al (büyük/küçük harf)
+    const currentMonthIncome = Number(result.CURRENT_MONTH_INCOME || result.current_month_income || result[0] || 0);
+    const lastMonthIncome = Number(result.PREVIOUS_MONTH_INCOME || result.previous_month_income || result[1] || 0);
+    
+    // growth_percentage için özel kontrol (string olarak geliyor olabilir)
+    let growthPercentage = 0;
+    if (result.GROWTH_PERCENTAGE !== null && result.GROWTH_PERCENTAGE !== undefined) {
+      growthPercentage = Number(result.GROWTH_PERCENTAGE);
+    } else if (result.growth_percentage !== null && result.growth_percentage !== undefined) {
+      growthPercentage = Number(result.growth_percentage);
+    } else if (result[2] !== null && result[2] !== undefined) {
+      growthPercentage = Number(result[2]);
+    }
+    
+    // NaN kontrolü
+    if (isNaN(growthPercentage)) {
+      growthPercentage = 0;
+    }
+    
+    console.log('🔍 Hesaplanan değerler:', {
+      currentMonthIncome,
+      lastMonthIncome, 
+      growthPercentage
+    });
+    
+    // Debug: Hangi kolon isimlerinin kullanıldığını logla
+    console.log('🔍 Bulunan değerler:', {
+      currentMonthIncome,
+      lastMonthIncome, 
+      growthPercentage,
+      'CURRENT_MONTH_INCOME': result.CURRENT_MONTH_INCOME,
+      'current_month_income': result.current_month_income,
+      'PREVIOUS_MONTH_INCOME': result.PREVIOUS_MONTH_INCOME,
+      'previous_month_income': result.previous_month_income,
+      'GROWTH_PERCENTAGE': result.GROWTH_PERCENTAGE,
+      'growth_percentage': result.growth_percentage
+    });
+
+    // Türkçe ay isimleri
+    const monthNames = [
+      'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+      'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
+    ];
+    
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1; // 1-12
+
+    const responseData = {
+      currentMonth: {
+        name: monthNames[currentMonth - 1],
+        year: currentYear,
+        income: currentMonthIncome
+      },
+      lastMonth: {
+        name: monthNames[currentMonth - 2 >= 0 ? currentMonth - 2 : 11],
+        year: currentMonth - 2 >= 0 ? currentYear : currentYear - 1,
+        income: lastMonthIncome
+      },
+      percentageChange: growthPercentage,
+      totalIncome: currentMonthIncome
+    };
+    
+    console.log('🔍 Frontend\'e gönderilecek veri:', responseData);
+
+    return res.json({
+      success: true,
+      data: responseData
+    });
+
+  } catch (error) {
+    console.error('❌ Aylık gelir hesaplama hatası:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Aylık gelir hesaplanırken hata oluştu',
+      error: error.message
+    });
+  }
+});
+
+// Aylık hasta endpoint'i
+router.get('/monthly-patients', authenticateToken, async (req, res) => {
+  try {
+    console.log('🔍 Monthly patients endpoint çağrıldı');
+    
+    // Aktif MariaDB bağlantısı
+    const connRes = await pool.query('SELECT * FROM data_connections WHERE is_active = true ORDER BY updated_at DESC LIMIT 1');
+    if (connRes.rows.length === 0) {
+      console.log('❌ Aktif veritabanı bağlantısı bulunamadı');
+      return res.status(400).json({
+        success: false,
+        message: 'Veritabanı bağlantısı kurulamadı. Lütfen daha sonra tekrar deneyin.',
+        technicalError: 'No active database connection'
+      });
+    }
+    const conn = connRes.rows[0];
+    console.log('✅ Veritabanı bağlantısı bulundu:', conn.host, conn.database_name);
+
+    // MariaDB bağlantısı
+    const mariadb = await mysql.createConnection({
+      host: conn.host,
+      port: parseInt(conn.port),
+      user: conn.username,
+      password: conn.password || '',
+      database: conn.database_name
+    });
+    console.log('✅ MariaDB bağlantısı kuruldu');
+
+
+    console.log('🔍 Çalıştırılacak SQL sorgusu:', sql);
+
+    // Sorguyu çalıştır
+    const [rows] = await mariadb.execute(sql);
+    await mariadb.end();
+    console.log('✅ MariaDB sorgusu tamamlandı');
+
+    // Debug: Sorgu sonucunu logla
+    console.log('🔍 SQL Sonucu (rows):', rows);
+    console.log('🔍 Sonuç tipi:', typeof rows);
+    console.log('🔍 Sonuç uzunluğu:', rows ? rows.length : 'undefined');
+
+    if (rows && rows.length > 0) {
+      const row = rows[0];
+      console.log('🔍 İlk satır sonucu:', row);
+      console.log('🔍 Kolon isimleri:', Object.keys(row));
+      console.log('🔍 Sonuç değerleri:', row);
+      
+      // Esnek kolon adı desteği
+      const currentMonthPatients = row.current_month_patients || row.CURRENT_MONTH_PATIENTS || 0;
+      const lastMonthPatients = row.previous_month_patients || row.PREVIOUS_MONTH_PATIENTS || 0;
+      const growthPercentage = row.patient_growth_percentage || row.PATIENT_GROWTH_PERCENTAGE || 0;
+      
+      console.log('🔍 Hesaplanan değerler:', {
+        currentMonthPatients,
+        lastMonthPatients,
+        growthPercentage
+      });
+      
+      // Türkçe ay isimleri
+      const months = [
+        'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+        'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
+      ];
+      
+      const now = new Date();
+      const currentMonth = months[now.getMonth()];
+      const lastMonth = months[(now.getMonth() - 1 + 12) % 12];
+      
+      const responseData = {
+        currentMonth: { 
+          name: currentMonth, 
+          year: now.getFullYear(), 
+          patients: parseInt(currentMonthPatients) || 0 
+        },
+        lastMonth: { 
+          name: lastMonth, 
+          year: now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear(), 
+          patients: parseInt(lastMonthPatients) || 0 
+        },
+        percentageChange: parseFloat(growthPercentage) || 0,
+        totalPatients: parseInt(currentMonthPatients) || 0
+      };
+      
+      console.log('🔍 Frontend\'e gönderilecek veri:', responseData);
+      
+      res.json({
+        success: true,
+        data: responseData
+      });
+    } else {
+      console.log('❌ Sorgu sonucu boş');
+      res.status(400).json({
+        success: false,
+        message: 'Sorgu sonucu boş'
+      });
+    }
+
+  } catch (error) {
+    console.log('❌ Monthly patients endpoint hatası:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Aylık hasta verileri alınırken hata oluştu',
+      error: error.message
+    });
+  }
+});
+
+// Debug: Tüm sorguları getir (admin/superadmin için)
+router.get('/debug/all-queries', authenticateToken, async (req, res) => {
+  try {
+    if (!req.user.role || (req.user.role !== 1 && req.user.role !== 2 && req.user.role !== '1' && req.user.role !== '2')) {
+      return res.status(403).json({
+        success: false,
+        message: 'Bu işlem için yetkiniz yok'
+      });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT id, name, description, category, is_public, created_at, updated_at
+       FROM saved_queries
+       ORDER BY created_at DESC`
+    );
+    
+    return res.json({ 
+      success: true, 
+      queries: rows,
+      summary: {
+        total: rows.length,
+        public: rows.filter(q => q.is_public).length,
+        private: rows.filter(q => !q.is_public).length
+      }
+    });
+  } catch (error) {
+    console.error('debug all-queries error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Tüm sorgular alınamadı', 
+      error: error.message 
+    });
+  }
+});
+
+// Herkese açık (auth gerekli) kayıtlı sorguları getir

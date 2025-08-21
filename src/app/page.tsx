@@ -88,6 +88,76 @@ export default function Home() {
     message: 'Bağlantı durumu bilinmiyor'
   });
   const [checkingDbStatus, setCheckingDbStatus] = useState(false);
+  
+  // Aylık gelir state'i
+  const [monthlyRevenue, setMonthlyRevenue] = useState<{
+    currentMonth: { name: string; year: number; income: number };
+    lastMonth: { name: string; year: number; income: number };
+    percentageChange: number;
+    totalIncome: number;
+  }>({
+    currentMonth: { name: '', year: 0, income: 0 },
+    lastMonth: { name: '', year: 0, income: 0 },
+    percentageChange: 0,
+    totalIncome: 0
+  });
+  const [revenueLoading, setRevenueLoading] = useState(true);
+
+  // Aylık hasta state'i
+  const [monthlyPatients, setMonthlyPatients] = useState<{
+    currentMonth: { name: string; year: number; patients: number };
+    lastMonth: { name: string; year: number; patients: number };
+    percentageChange: number;
+    totalPatients: number;
+  }>({
+    currentMonth: { name: '', year: 0, patients: 0 },
+    lastMonth: { name: '', year: 0, patients: 0 },
+    percentageChange: 0,
+    totalPatients: 0
+  });
+  const [patientsLoading, setPatientsLoading] = useState(true);
+
+  // Dashboard kartları state'i
+  const [dashboardCards, setDashboardCards] = useState<Array<{
+    id: number;
+    name: string;
+    display_name: string;
+    card_type: string;
+    icon: string;
+    color: string;
+    value: string;
+    additionalData: any;
+  }>>([]);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
+
+  // Kategori ikonları
+  const getCategoryIcon = (category: string) => {
+    switch (category?.toLowerCase()) {
+      case 'patient':
+      case 'hasta':
+        return <Users className="h-6 w-6 text-white" />;
+      case 'branch':
+      case 'şube':
+        return <Building2 className="h-6 w-6 text-white" />;
+      case 'financial':
+      case 'finansal':
+        return <Activity className="h-6 w-6 text-white" />;
+      case 'appointment':
+      case 'randevu':
+        return <Calendar className="h-6 w-6 text-white" />;
+      case 'treatment':
+      case 'tedavi':
+        return <Activity className="h-6 w-6 text-white" />;
+      case 'personnel':
+      case 'personel':
+        return <Users className="h-6 w-6 text-white" />;
+      case 'time':
+      case 'zaman':
+        return <Calendar className="h-6 w-6 text-white" />;
+      default:
+        return <FileText className="h-6 w-6 text-white" />;
+    }
+  };
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -144,12 +214,122 @@ export default function Home() {
       checkDatabaseConnection().catch(error => {
         console.error('Veritabanı bağlantı durumu kontrol edilirken hata:', error);
       });
+
+      // Aylık gelir verilerini yükle
+      loadMonthlyRevenue().catch(error => {
+        console.error('Aylık gelir verileri yüklenirken hata:', error);
+      });
+
+      // Aylık hasta verilerini yükle
+      loadMonthlyPatients().catch(error => {
+        console.error('Aylık hasta verileri yüklenirken hata:', error);
+      });
+
+      // Dashboard kartlarını yükle
+      loadDashboardCards().catch(error => {
+        console.error('Dashboard kartları yüklenirken hata:', error);
+      });
     };
     
     checkAuth();
   }, []);
 
   const canSeeAdmin = role === 1 || role === 2;
+
+  // Dashboard kartlarını yükle
+  const loadDashboardCards = async () => {
+    try {
+      setDashboardLoading(true);
+      const response = await apiGet('http://localhost:5000/api/reports/dashboard-data');
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setDashboardCards(data.data);
+        }
+      }
+    } catch (error) {
+      console.error('Dashboard kartları yüklenirken hata:', error);
+    } finally {
+      setDashboardLoading(false);
+    }
+  };
+
+  // Aylık gelir verilerini yükle
+  const loadMonthlyRevenue = async () => {
+    try {
+      setRevenueLoading(true);
+      console.log('🔍 Aylık gelir API çağrısı yapılıyor...');
+      const response = await apiGet('http://localhost:5000/api/reports/monthly-revenue');
+      console.log('🔍 API response:', response);
+      console.log('🔍 API response status:', response.status);
+      console.log('🔍 API response ok:', response.ok);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('🔍 API data:', data);
+        console.log('🔍 API data success:', data.success);
+        console.log('🔍 API data.data:', data.data);
+        
+        if (data.success) {
+          console.log('🔍 Aylık gelir state güncelleniyor...');
+          console.log('🔍 Eski state:', monthlyRevenue);
+          setMonthlyRevenue(data.data);
+          console.log('🔍 Yeni state:', data.data);
+          console.log('🔍 State güncellendi, şimdi totalIncome:', data.data.totalIncome);
+        } else {
+          console.error('❌ API success false:', data.message);
+        }
+      } else {
+        console.error('❌ API response not ok:', response.status, response.statusText);
+        const errorText = await response.text();
+        console.error('❌ API error text:', errorText);
+      }
+    } catch (error) {
+      console.error('❌ Aylık gelir yüklenirken hata:', error);
+    } finally {
+      setRevenueLoading(false);
+      console.log('🔍 Revenue loading false yapıldı');
+    }
+  };
+
+  // Aylık hasta verilerini yükle
+  const loadMonthlyPatients = async () => {
+    try {
+      setPatientsLoading(true);
+      console.log('🔍 Aylık hasta API çağrısı yapılıyor...');
+      const response = await apiGet('http://localhost:5000/api/reports/monthly-patients');
+      console.log('🔍 API response:', response);
+      console.log('🔍 API response status:', response.status);
+      console.log('🔍 API response ok:', response.ok);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('🔍 API data:', data);
+        console.log('🔍 API data success:', data.success);
+        console.log('🔍 API data.data:', data.data);
+        
+        if (data.success) {
+          console.log('🔍 Aylık hasta state güncelleniyor...');
+          console.log('🔍 Eski state:', monthlyPatients);
+          setMonthlyPatients(data.data);
+          console.log('🔍 Yeni state:', data.data);
+          console.log('🔍 State güncellendi, şimdi totalPatients:', data.data.totalPatients);
+        } else {
+          console.error('❌ API success false:', data.message);
+        }
+      } else {
+        console.error('❌ API response not ok:', response.status, response.statusText);
+        const errorText = await response.text();
+        console.error('❌ API error text:', errorText);
+      }
+    } catch (error) {
+      console.error('❌ Aylık hasta yüklenirken hata:', error);
+    } finally {
+      setPatientsLoading(false);
+      console.log('🔍 Patients loading false yapıldı');
+    }
+  };
 
   // Veritabanı bağlantı durumunu kontrol et
   const checkDatabaseConnection = async () => {
@@ -279,34 +459,7 @@ export default function Home() {
     activeBranches: realBranches.length
   };
 
-  // Kategori ikonları
-  const getCategoryIcon = (category: string) => {
-    switch (category.toLowerCase()) {
-      case 'financial':
-      case 'finansal':
-        return <TrendingUp className="h-6 w-6 text-white" />;
-      case 'patient':
-      case 'hasta':
-        return <Users className="h-6 w-6 text-white" />;
-      case 'appointment':
-      case 'randevu':
-        return <Calendar className="h-6 w-6 text-white" />;
-      case 'branch':
-      case 'şube':
-        return <Building2 className="h-6 w-6 text-white" />;
-      case 'treatment':
-      case 'tedavi':
-        return <Activity className="h-6 w-6 text-white" />;
-      case 'personnel':
-      case 'personel':
-        return <UserCheck className="h-6 w-6 text-white" />;
-      case 'time':
-      case 'zaman':
-        return <Clock className="h-6 w-6 text-white" />;
-      default:
-        return <BarChart3 className="h-6 w-6 text-white" />;
-    }
-  };
+
 
   // Kategori renkleri
   const getCategoryColors = (category: string) => {
@@ -343,79 +496,220 @@ export default function Home() {
       
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Enhanced Stats Cards */}
+        {/* Dashboard Kartları */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 relative overflow-hidden">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-bold text-gray-600 uppercase tracking-wider">Aktif Şube</p>
-                <p className="text-4xl font-bold text-gray-900 mt-3">{totalStats.activeBranches}</p>
-                <div className="flex items-center mt-2">
-                  <CheckCircle className="h-4 w-4 text-green-500 mr-1" />
-                  <p className="text-sm text-green-600 font-semibold">Tümü Aktif</p>
+          {dashboardLoading ? (
+            // Loading durumu
+            Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 animate-pulse">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="h-4 bg-gray-200 rounded w-24 mb-3"></div>
+                    <div className="h-10 bg-gray-200 rounded w-16 mb-2"></div>
+                    <div className="h-4 bg-gray-200 rounded w-32"></div>
+                  </div>
+                  <div className="w-16 h-16 bg-gray-200 rounded-2xl"></div>
                 </div>
               </div>
-              <div className="p-4 bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl shadow-lg">
-                <Building2 className="h-10 w-10 text-white" />
-              </div>
-            </div>
-            {/* Sağ üst köşe dekoratif çizgi */}
-            <div className="absolute top-0 right-0 w-16 h-1 bg-gradient-to-l from-blue-500 to-blue-600 rounded-bl-full"></div>
-          </div>
+            ))
+          ) : dashboardCards.length > 0 ? (
+            // Dashboard kartları
+            dashboardCards.map((card) => {
+              const getIconComponent = (iconName: string) => {
+                switch (iconName) {
+                  case 'building': return Building2;
+                  case 'users': return Users;
+                  case 'calendar': return Calendar;
+                  case 'dollar': return DollarSign;
+                  default: return BarChart3;
+                }
+              };
 
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 relative overflow-hidden">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-bold text-gray-600 uppercase tracking-wider">Toplam Hasta</p>
-                <p className="text-4xl font-bold text-gray-900 mt-3">{totalStats.totalPatients.toLocaleString()}</p>
-                <div className="flex items-center mt-2">
-                  <TrendingUp className="h-4 w-4 text-blue-500 mr-1" />
-                  <p className="text-sm text-blue-600 font-semibold">+12% bu ay</p>
-                </div>
-              </div>
-              <div className="p-4 bg-gradient-to-r from-green-500 to-green-600 rounded-2xl shadow-lg">
-                <Users className="h-10 w-10 text-white" />
-              </div>
-            </div>
-            {/* Sağ üst köşe dekoratif çizgi */}
-            <div className="absolute top-0 right-0 w-16 h-1 bg-gradient-to-l from-green-500 to-green-600 rounded-bl-full"></div>
-          </div>
+              const getColorClasses = (color: string) => {
+                switch (color) {
+                  case 'blue': return 'from-blue-500 to-blue-600';
+                  case 'green': return 'from-green-500 to-green-600';
+                  case 'purple': return 'from-purple-500 to-purple-600';
+                  case 'orange': return 'from-orange-500 to-orange-600';
+                  case 'red': return 'from-red-500 to-red-600';
+                  case 'indigo': return 'from-indigo-500 to-indigo-600';
+                  default: return 'from-blue-500 to-blue-600';
+                }
+              };
 
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 relative overflow-hidden">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-bold text-gray-600 uppercase tracking-wider">Bugünkü Randevu</p>
-                <p className="text-4xl font-bold text-gray-900 mt-3">{totalStats.totalAppointments}</p>
-                <div className="flex items-center mt-2">
-                  <Clock className="h-4 w-4 text-purple-500 mr-1" />
-                  <p className="text-sm text-purple-600 font-semibold">8 randevu kaldı</p>
-                </div>
-              </div>
-              <div className="p-4 bg-gradient-to-r from-purple-500 to-purple-600 rounded-2xl shadow-lg">
-                <Calendar className="h-10 w-10 text-white" />
-              </div>
-            </div>
-            {/* Sağ üst köşe dekoratif çizgi */}
-            <div className="absolute top-0 right-0 w-16 h-1 bg-gradient-to-l from-purple-500 to-purple-600 rounded-bl-full"></div>
-          </div>
+              const IconComponent = getIconComponent(card.icon);
+              const colorClasses = getColorClasses(card.color);
 
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 relative overflow-hidden">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-bold text-gray-600 uppercase tracking-wider">Aylık Gelir</p>
-                <p className="text-4xl font-bold text-gray-900 mt-3">₺{totalStats.totalRevenue.toLocaleString()}</p>
-                <div className="flex items-center mt-2">
-                  <TrendingUp className="h-4 w-4 text-orange-500 mr-1" />
-                  <p className="text-sm text-orange-600 font-semibold">+8.5% geçen aya göre</p>
+              return (
+                <div key={card.id} className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 relative overflow-hidden">
+                  {/* Sağ üst küçük ikon */}
+                  <div className={`absolute top-3 right-3 p-2 bg-gradient-to-r ${colorClasses} rounded-xl shadow-md`}> 
+                    <IconComponent className="h-5 w-5 text-white" />
+                  </div>
+                  <div className="flex items-start">
+                    <div>
+                      <p className="text-sm font-bold text-gray-600 uppercase tracking-wider">
+                        {card.display_name}
+                      </p>
+                      <p className="text-4xl font-bold text-gray-900 mt-3">{card.value}</p>
+                      
+                      {/* Ek bilgiler - Status kaldırıldı */}
+                      
+                      {card.additionalData.trend && (
+                        <div className="flex items-center mt-2">
+                          {card.additionalData.percentageChange > 0 ? (
+                            <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
+                          ) : card.additionalData.percentageChange < 0 ? (
+                            <TrendingDown className="h-4 w-4 text-red-500 mr-1" />
+                          ) : (
+                            <TrendingUp className="h-4 w-4 text-blue-500 mr-1" />
+                          )}
+                          <p className={`text-sm font-semibold ${
+                            card.additionalData.percentageChange > 0 ? 'text-green-600' : 
+                            card.additionalData.percentageChange < 0 ? 'text-red-600' : 'text-blue-600'
+                          }`}>
+                            {card.additionalData.trend}
+                          </p>
+                        </div>
+                      )}
+                      
+                      {card.additionalData.detail && (
+                        <div className="flex items-center mt-2">
+                          <Clock className="h-4 w-4 text-purple-500 mr-1" />
+                          <p className="text-sm text-purple-600 font-semibold">
+                            {card.additionalData.detail}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Sağ üst köşe dekoratif çizgi */}
+                  <div className={`absolute top-0 right-0 w-16 h-1 bg-gradient-to-l ${colorClasses} rounded-bl-full`}></div>
                 </div>
+              );
+            })
+          ) : (
+            // Fallback kartlar (dashboard kartları yoksa)
+            <>
+              <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 relative overflow-hidden">
+                {/* Sağ üst küçük ikon */}
+                <div className="absolute top-3 right-3 p-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl shadow-md">
+                  <Building2 className="h-5 w-5 text-white" />
+                </div>
+                <div className="flex items-start">
+                  <div>
+                    <p className="text-sm font-bold text-gray-600 uppercase tracking-wider">Aktif Şube</p>
+                    <p className="text-4xl font-bold text-gray-900 mt-3">{totalStats.activeBranches}</p>
+                    <div className="flex items-center mt-2">
+                      <CheckCircle className="h-4 w-4 text-green-500 mr-1" />
+                      <p className="text-sm text-green-600 font-semibold">Tümü Aktif</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="absolute top-0 right-0 w-16 h-1 bg-gradient-to-l from-blue-500 to-blue-600 rounded-bl-full"></div>
               </div>
-              <div className="p-4 bg-gradient-to-r from-orange-500 to-orange-600 rounded-2xl shadow-lg">
-                <DollarSign className="h-10 w-10 text-white" />
+
+              <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 relative overflow-hidden">
+                {/* Sağ üst küçük ikon */}
+                <div className="absolute top-3 right-3 p-2 bg-gradient-to-r from-green-500 to-green-600 rounded-xl shadow-md">
+                  <Users className="h-5 w-5 text-white" />
+                </div>
+                <div className="flex items-start">
+                  <div>
+                    <p className="text-sm font-bold text-gray-600 uppercase tracking-wider">Aylık Hasta</p>
+                    {patientsLoading ? (
+                      <div className="flex items-center mt-3">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
+                        <span className="ml-3 text-gray-500">Yükleniyor...</span>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-4xl font-bold text-gray-900 mt-3">
+                          {monthlyPatients.totalPatients.toLocaleString()}
+                        </p>
+                        <div className="flex items-center mt-2">
+                          {monthlyPatients.percentageChange >= 0 ? (
+                            <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
+                          ) : (
+                            <TrendingDown className="h-4 w-4 text-red-500 mr-1" />
+                          )}
+                          <p className={`text-sm font-semibold ${
+                            monthlyPatients.percentageChange >= 0 ? 'text-green-600' : 'text-red-600'
+                          }`}>
+                            {monthlyPatients.percentageChange >= 0 ? '+' : ''}{monthlyPatients.percentageChange}% geçen aya göre
+                          </p>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {monthlyPatients.currentMonth.name} {monthlyPatients.currentMonth.year}
+                        </p>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="absolute top-0 right-0 w-16 h-1 bg-gradient-to-l from-green-500 to-green-600 rounded-bl-full"></div>
               </div>
-            </div>
-            {/* Sağ üst köşe dekoratif çizgi */}
-            <div className="absolute top-0 right-0 w-16 h-1 bg-gradient-to-l from-orange-500 to-orange-600 rounded-bl-full"></div>
-          </div>
+
+              <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 relative overflow-hidden">
+                {/* Sağ üst küçük ikon */}
+                <div className="absolute top-3 right-3 p-2 bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl shadow-md">
+                  <Calendar className="h-5 w-5 text-white" />
+                </div>
+                <div className="flex items-start">
+                  <div>
+                    <p className="text-sm font-bold text-gray-600 uppercase tracking-wider">Bugünkü Randevu</p>
+                    <p className="text-4xl font-bold text-gray-900 mt-3">{totalStats.totalAppointments}</p>
+                    <div className="flex items-center mt-2">
+                      <Clock className="h-4 w-4 text-purple-500 mr-1" />
+                      <p className="text-sm text-purple-600 font-semibold">8 randevu kaldı</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="absolute top-0 right-0 w-16 h-1 bg-gradient-to-l from-purple-500 to-purple-600 rounded-bl-full"></div>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 relative overflow-hidden">
+                {/* Sağ üst küçük ikon */}
+                <div className="absolute top-3 right-3 p-2 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl shadow-md">
+                  <DollarSign className="h-5 w-5 text-white" />
+                </div>
+                <div className="flex items-start">
+                  <div>
+                    <p className="text-sm font-bold text-gray-600 uppercase tracking-wider">Aylık Gelir</p>
+                    {revenueLoading ? (
+                      <div className="flex items-center mt-3">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+                        <span className="ml-3 text-gray-500">Yükleniyor...</span>
+                      </div>
+                    ) : (
+                      <>
+
+                        <p className="text-4xl font-bold text-gray-900 mt-3">
+                          ₺{monthlyRevenue.totalIncome.toLocaleString('tr-TR')}
+                        </p>
+                        <div className="flex items-center mt-2">
+                          {monthlyRevenue.percentageChange >= 0 ? (
+                            <TrendingUp className="h-4 w-4 text-orange-500 mr-1" />
+                          ) : (
+                            <TrendingDown className="h-4 w-4 text-red-500 mr-1" />
+                          )}
+                          <p className={`text-sm font-semibold ${
+                            monthlyRevenue.percentageChange >= 0 ? 'text-orange-600' : 'text-red-600'
+                          }`}>
+                            {monthlyRevenue.percentageChange >= 0 ? '+' : ''}{monthlyRevenue.percentageChange}% geçen aya göre
+                          </p>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {monthlyRevenue.currentMonth.name} {monthlyRevenue.currentMonth.year}
+                        </p>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="absolute top-0 right-0 w-16 h-1 bg-gradient-to-l from-orange-500 to-orange-600 rounded-bl-full"></div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Database Connection Status Card */}
@@ -612,11 +906,21 @@ export default function Home() {
           <div className="flex items-center justify-between mb-8">
             <div>
               <h2 className="text-2xl font-bold text-gray-900">Hızlı Raporlar</h2>
-              <p className="text-gray-600 mt-1">PostgreSQL'den dinamik olarak yüklenen kayıtlı sorgular</p>
+              <p className="text-gray-600 mt-1">
+                PostgreSQL'den dinamik olarak yüklenen kayıtlı sorgular 
+                <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+                  {savedQueries.length} sorgu bulundu
+                </span>
+              </p>
             </div>
-            <Link href="/reports" className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all duration-300 font-semibold">
-              Tüm Raporlar →
-            </Link>
+            <div className="flex items-center space-x-3">
+              <Link href="/admin/queries" className="bg-gray-600 text-white px-4 py-2 rounded-xl hover:bg-gray-700 transition-all duration-300 font-semibold text-sm">
+                Admin Panel →
+              </Link>
+              <Link href="/reports" className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all duration-300 font-semibold">
+                Tüm Raporlar →
+              </Link>
+            </div>
           </div>
           
           {queriesLoading ? (
@@ -627,8 +931,17 @@ export default function Home() {
           ) : savedQueries.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               <FileText className="h-16 w-16 mx-auto text-gray-300 mb-4" />
-              <p className="text-lg">Henüz kayıtlı sorgu yok</p>
-              <p className="text-sm">Admin panelinden veritabanı sorguları ekleyebilirsiniz</p>
+              <p className="text-lg">Henüz genel erişime açık sorgu yok</p>
+              <p className="text-sm mb-4">Admin panelinden veritabanı sorguları ekleyip "Genel erişime aç" seçeneğini işaretleyebilirsiniz</p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
+                <h4 className="font-medium text-blue-800 mb-2">💡 Nasıl Sorgu Eklenir?</h4>
+                <ol className="text-sm text-blue-700 text-left space-y-1">
+                  <li>1. Admin Panel → Sorgular → Yeni Sorgu</li>
+                  <li>2. Sorgu bilgilerini doldurun</li>
+                  <li>3. <strong>"Bu sorguyu genel erişime aç"</strong> seçeneğini işaretleyin</li>
+                  <li>4. Kaydedin</li>
+                </ol>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -641,15 +954,20 @@ export default function Home() {
                       <div className="p-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl shadow-lg">
                         {getCategoryIcon(query.category)}
                       </div>
-                      <span className={`text-xs font-semibold px-3 py-1 rounded-full ${
-                        query.category === 'patient' || query.category === 'hasta' ? 'bg-blue-100 text-blue-700' :
-                        query.category === 'branch' || query.category === 'şube' ? 'bg-orange-100 text-orange-700' :
-                        query.category === 'financial' || query.category === 'finansal' ? 'bg-green-100 text-green-700' :
-                        query.category === 'appointment' || query.category === 'randevu' ? 'bg-purple-100 text-purple-700' :
-                        'bg-gray-100 text-gray-700'
-                      }`}>
-                        {query.category || 'Genel'}
-                      </span>
+                      <div className="flex flex-col items-end space-y-2">
+                        <span className={`text-xs font-semibold px-3 py-1 rounded-full ${
+                          query.category === 'patient' || query.category === 'hasta' ? 'bg-blue-100 text-blue-700' :
+                          query.category === 'branch' || query.category === 'şube' ? 'bg-orange-100 text-orange-700' :
+                          query.category === 'financial' || query.category === 'finansal' ? 'bg-green-100 text-green-700' :
+                          query.category === 'appointment' || query.category === 'randevu' ? 'bg-purple-100 text-purple-700' :
+                          'bg-gray-100 text-gray-700'
+                        }`}>
+                          {query.category || 'Genel'}
+                        </span>
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                          🌐 Public
+                        </span>
+                      </div>
                     </div>
                     
                     {/* Başlık ve açıklama */}
